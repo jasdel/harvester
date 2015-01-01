@@ -1,86 +1,68 @@
 package queue
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"log"
-	"net/http"
-	"net/url"
-	"path"
+	"github.com/apcera/nats"
+	"github.com/jasdel/harvester/internal/types"
 )
 
-const FirstLevel = 0
-
-type ClientConfig struct {
-	WebClient *http.Client
-	Endpoint  string
+type client struct {
+	ec     *nats.EncodedConn
+	sendCh chan *types.URLQueueItem
+	recvCh chan *types.URLQueueItem
 }
 
-type Client struct {
-	endpoint  string
-	webClient *http.Client
+type Publisher interface {
+	Close()
+	Send(item *types.URLQueueItem)
 }
 
-// Creates a new instance of the queue client. With a passed in
-// configuration.  Only a single client is needed per process,
-// and is save across go routines.
-func NewClient(cfg *ClientConfig) *Client {
-	// Verify th queue host is a valid URL now so it doesn't need to be
-	// checked later.
-	if _, err := url.Parse(cfg.Endpoint); err != nil {
-		panic(fmt.Sprintf("queue.NewClient, invalid Endpoint URL", err))
-	}
-
-	return &Client{
-		webClient: cfg.WebClient,
-		endpoint:  cfg.Endpoint,
-	}
+type Receiver interface {
+	Close()
+	Receive() <-chan *types.URLQueueItem
 }
 
-// Enqueues a set of URLs with the queue service.
-func (c *Client) Enqueue(urls []string, level int) error {
-	if len(urls) == 0 {
-		return fmt.Errorf("No URLs to enqueue")
-	}
-
-	respBody, err := c.post("enqueue", urls)
-	if err != nil {
-		return err
-	}
-
-	log.Println("Queue Client Enqueue: DEBUG:", string(respBody))
-
-	return nil
+func NewPublisher(connURL, topic string) (Publisher, error) {
+	return newClient(connURL, topic, true, false)
 }
 
-// Submits a post HTTP request to the configured endpoint including the operation
-// and content payload. The response body is returned in bytes.
-func (c *Client) post(operation string, content interface{}) ([]byte, error) {
-	buf := &bytes.Buffer{}
-	e := json.NewEncoder(buf)
-	if err := e.Encode(content); err != nil {
-		return nil, err
-	}
+func NewReceiver(connURL, topic string) (Receiver, error) {
+	return newClient(connURL, topic, false, true)
+}
 
-	u, _ := url.Parse(c.endpoint)
-	u.Path = path.Join(u.Path, operation)
+func newClient(connURL, topic string, sender, receiver bool) (*client, error) {
+	c := &client{}
 
-	req, err := http.NewRequest("POST", u.String(), buf)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.webClient.Do(req)
+	nc, err := nats.Connect(connURL)
 	if err != nil {
 		return nil, err
 	}
 
-	buf.Reset()
-	if _, err := buf.ReadFrom(resp.Body); err != nil {
+	c.ec, err = nats.NewEncodedConn(nc, "json")
+	if err != nil {
 		return nil, err
 	}
 
-	return buf.Bytes(), nil
+	if sender {
+		c.sendCh = make(chan *types.URLQueueItem)
+		c.ec.BindSendChan(topic, c.sendCh)
+	}
+
+	if receiver {
+		c.recvCh = make(chan *types.URLQueueItem)
+		c.ec.BindRecvQueueChan(topic, topic, c.recvCh)
+	}
+
+	return c, nil
+}
+
+func (c *client) Close() {
+	c.ec.Close()
+}
+
+func (c *client) Send(item *types.URLQueueItem) {
+	c.sendCh <- item
+}
+
+func (c *client) Receive() <-chan *types.URLQueueItem {
+	return c.recvCh
 }

@@ -12,33 +12,22 @@ CREATE TABLE IF NOT EXISTS job_urls (
     job_id    INT    NOT NULL,
     url       text   NOT NULL,
     completed BOOL   NOT NULL DEFAULT FALSE,
+    completed_on   TIMESTAMP WITH TIME ZONE,
     FOREIGN key (job_id) REFERENCES job(id)
 );
 
-CREATE TABLE IF NOT EXISTS url_queue (
-    id        serial PRIMARY KEY,
-    processed BOOL   NOT NULL DEFAULT FALSE,
-    url       TEXT   NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS url (
-    id         serial PRIMARY KEY,
-    url        TEXT   NOT NULL,
-    referer    TEXT   NOT NULL, --origin URL encountered for this URL record
-    created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    id              serial PRIMARY KEY,
+    mime            TEXT,
+    url             TEXT   NOT NULL,
+    referer         TEXT   NOT NULL, --origin URL encountered for this URL record
+    has_descendants BOOL, -- null=not scanned, TRUE|FALSE scanned with or without descendants
+    created_on      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX url_pair ON url (url, referer);
 
-/* Function for notifying on url_queue inserts */
--- cleanup: DROP FUNCTION url_queue_notify_trigger() CASCADE;
-CREATE OR REPLACE FUNCTION url_queue_notify_trigger()
-	RETURNS trigger AS $$
-	DECLARE
-	BEGIN
-		PERFORM pg_notify('url_queue_watchers', null);
-		RETURN new;
-	END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER watched_url_queue_trigger AFTER INSERT ON url_queue
-	FOR EACH ROW EXECUTE PROCEDURE url_queue_notify_trigger();
+CREATE TABLE IF NOT EXISTS url_pending (
+	id serial PRIMARY KEY,
+	origin TEXT NOT NULL,
+	descendant TEXT NOT NULL,
+)

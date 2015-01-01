@@ -19,3 +19,11 @@ type JobResult struct {
 	JobStatus
 	Results map[string][]string
 }
+
+type URLQueueItem struct {
+	Origin      string   `json:"origin"`
+	Refer       string   `json:"refer"`
+	URL         string   `json:"url"`
+	Descendants []string `json:"descendants"`
+	Level       int      `json:"level"`
+}

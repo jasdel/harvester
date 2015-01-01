@@ -1,0 +1,42 @@
+URLQueueItem {
+	origin:      string
+	refer:       string
+	descendants: []string
+	level:       int
+}
+
+Web Server Receives Job request
+|-> Creates Job in DB, with Job's URLS
+|-> Validates URLs look valid
+|-> calls queueService.Add({origin:url[i], level:0}, ...)
+|
+v
+QueueService receives URL queue add
+|-> If URLQueueItem has no refer use origin as URL field.
+	|-> If URL field is known and is also a refer in known table
+		|-> find Jobs with origin not completed, and mark as completed. (STOP)
+	|-> Else if URL is known but not a refer, and url.has_descendants != null
+		|-> continue
+	|-> Else if URL is not known add to known with no refer.
+|-> publish URLQueueItem to worker queue
+|
+v
+Worker Pulls URLQueueItem from queue
+|-> Request Content for URL
+|-> if mime is not text/html update know table entry for refer+URL
+	|-> Send URLQueueItem Complete with no descendants, and incremented level
+|-> scrape HTML page for URLS
+|-> for each found URL
+	|-> if URL looks like image insert into know with refer as this page, and remove from URL list
+|-> create URLQueueItem with this URL as refer and original URLQueueItem's origin, increment level
+	|-> Add remaining found URLs to URLQueueItem as descendants
+
+// TODO this could be its own service?
+
+|-> If URLQueueItem has descendants add descendants to know table with refer of this URL.
+|-> Update this URL's known entry for has_descendants true|false
+|-> if URLQueueItem has descendants and level <= x
+	|-> insert descendants into pending table for origin
+|-> Remove origin+URL from pending table
+|-> Check if origin has anymore entries in pending table
+	|-> find Jobs with origin not completed, and mark as completed

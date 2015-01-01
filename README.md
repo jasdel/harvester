@@ -33,7 +33,7 @@ Parts:
 ----------------
 - testify: Simple assert/require test syntax sugar
 - goji: web server router with url path params, and graceful shutdown
-- zeromq 4.1 w/ go bindings: for queue server <=> worker pub/sub
+- gnatsd w/ go bindings: message queue between webserver => queue server <=> worker
 
 
 # Possible Improvements #
@@ -54,12 +54,17 @@ EOF
 
 # Setup #
 ---------
+gnatsd for message queues
+$ go get github.com/apcera/gnatsd
+$ go get github.com/apcera/nats
+
 Create containers from docker file
 $ sudo docker build -t eg_postgresql ./setup
 
 Setup and start postgresql
-$ sudo docker run --rm -P --name pg_test eg_postgresql
-$ psql -h localhost -p 49153 -d docker -U docker --password < setup/db.sql
+$ sudo docker run --rm -p 24001:5432 --name pg_test eg_postgresql
+$ psql -h localhost -p 24001 -d docker -U docker --password < setup/db.sql
+$ gnatsd -p 4442
 
 # Notes #
 ---------

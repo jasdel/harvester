@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/apcera/nats"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
 	"github.com/jasdel/harvester/internal/types"
@@ -14,6 +15,16 @@ import (
 	"net/url"
 )
 
+var queuePub queue.Publisher
+
+func init() {
+	var err error
+	queuePub, err = queue.NewPublisher(nats.DefaultURL, "url_queue")
+	if err != nil {
+		panic(err)
+	}
+}
+
 type jobScheduledMsg struct {
 	JobId types.JobId `json:"jobId"`
 }
@@ -23,7 +34,7 @@ type jobScheduledMsg struct {
 // message, or job id if the schedule was successful.
 //
 // e.g:
-// curl -X POST --data-binary @- "http://localhost:8080" << EOF
+// curl -X POST --data-binary @- "http://localhost:8000" << EOF
 // https://www.google.com
 // http://example.com
 // EOF
@@ -104,17 +115,11 @@ func scheduleJob(urls []string) (types.JobId, *util.Error) {
 		}
 	}
 
-	qc := queue.NewClient(&queue.ClientConfig{WebClient: http.DefaultClient, Endpoint: "http://localhost:8081"})
-	if err := qc.Enqueue(urls, queue.FirstLevel); err != nil {
-		if err := c.DeleteJob(job.Id()); err != nil {
-			log.Println("scheduleJob queue Job failed, and failed to delete job.", job.Id(), err)
+	go func() {
+		for _, u := range urls {
+			queuePub.Send(&types.URLQueueItem{Origin: u, URL: u})
 		}
-		return types.InvalidJobId, &util.Error{
-			Source: "scheduleJob",
-			Info:   fmt.Sprintf("Enqueue job's URLs Failed"),
-			Err:    err,
-		}
-	}
+	}()
 
 	return job.Id(), nil
 }
