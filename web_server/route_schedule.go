@@ -81,12 +81,16 @@ func getRequestedJobURLs(in io.Reader) ([]string, *util.Error) {
 			continue
 		}
 		u, err := url.Parse(scanner.Text())
-		if err != nil || u.Host == "" {
+		if err != nil || u.Host == "" || (u.Scheme != "" && u.Scheme != "http" && u.Scheme != "https") {
 			return nil, &util.Error{
 				Source: "getRequestedJobURLs",
 				Info:   fmt.Sprintf("Invalid URL: %s", scanner.Text()),
 				Err:    err,
 			}
+		}
+		if u.Scheme == "" {
+			// set default scheme if non are provided, so the input could be www.example.com
+			u.Scheme = "http"
 		}
 		urls = append(urls, u.String())
 	}
