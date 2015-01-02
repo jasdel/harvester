@@ -53,14 +53,7 @@ func routeJobStatus(c web.C, w http.ResponseWriter, r *http.Request) {
 // the job's current status information.
 func jobStatus(id types.JobId) (*types.JobStatus, *util.Error) {
 	c := storage.NewClient()
-	job, err := c.GetJob(id)
-	if err != nil {
-		return nil, &util.Error{
-			Source: "jobStatus",
-			Info:   fmt.Sprintf("Failed to get job %d", id),
-			Err:    err,
-		}
-	}
+	job := c.ForJob(id)
 
 	status, err := job.Status()
 	if err != nil {

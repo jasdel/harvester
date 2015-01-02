@@ -10,20 +10,17 @@ import (
 	"net/http"
 )
 
-type jobResultMsg struct {
-	jobStatusMsg
-	Results map[string][]string `json:"results"`
-}
-
 // Handles the request checking on the status of a previously scheduled job.
 // Returns an error if the job isn't found, or invalid input. If the job
-// exists its status will be returned
+// exists its status will be returned. A result mime content type filter can
+// also be provided as the 'mime' query parameter. The parameter acts as a prefix
+// filter when returning results of a job
 //
 // e.g:
 // curl -X GET "http://localhost:8080/results/1234"
 //
 // Response:
-//	- Success: {completed: 2, pending: 3, elapsed: 5m10s, results: {<domain>: [<urls>]}}
+//	- Success: {<domain>: [ {Mime: <mime>, URL: <urls>} ]}
 //	- Failure: {code: <code>, message: <message>}
 func routeJobResult(c web.C, w http.ResponseWriter, r *http.Request) {
 	id, err := jobIdFromString(c.URLParams["jobId"])
@@ -33,7 +30,9 @@ func routeJobResult(c web.C, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, jobErr := jobResult(id)
+	mimeFilter := r.URL.Query().Get("mime")
+
+	result, jobErr := jobResult(id, mimeFilter)
 	if jobErr != nil {
 		log.Println("routeJobResult request job result failed.", jobErr)
 		writeJSONError(w, "DependancyFailure", jobErr.Short(), http.StatusInternalServerError)
@@ -45,19 +44,16 @@ func routeJobResult(c web.C, w http.ResponseWriter, r *http.Request) {
 }
 
 // Connects to the remote service hosting job information, and
-// the job's current result information.
-func jobResult(id types.JobId) (*types.JobResult, *util.Error) {
+// the job's current result information. Filter selects specific
+// mime types of job results. A filter of "" will return all results.
+// the filter acts as the prefix to a mime content type patter.
+//
+// e.g: mimeFilter := "image" // returns all image URLs
+func jobResult(id types.JobId, mimeFilter string) (types.JobResults, *util.Error) {
 	c := storage.NewClient()
-	job, err := c.GetJob(id)
-	if err != nil {
-		return nil, &util.Error{
-			Source: "jobResult",
-			Info:   fmt.Sprintf("Failed to get job %d", id),
-			Err:    err,
-		}
-	}
+	job := c.ForJob(id)
 
-	result, err := job.Result()
+	result, err := job.Result(mimeFilter)
 	if err != nil {
 		return nil, &util.Error{
 			Source: "jobResult",

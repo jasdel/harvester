@@ -9,21 +9,27 @@ type JobId int64
 const InvalidJobId = -1
 
 type JobStatus struct {
-	JobId     JobId
+	Id        JobId
 	Completed int
 	Pending   int
 	Elapsed   time.Duration
 }
 
+type JobResults map[string][]JobResult
+
 type JobResult struct {
-	JobStatus
-	Results map[string][]string
+	Mime string `json:"mime"`
+	URL  string `json:"url"`
 }
 
 type URLQueueItem struct {
-	Origin      string   `json:"origin"`
-	Refer       string   `json:"refer"`
-	URL         string   `json:"url"`
-	Descendants []string `json:"descendants"`
-	Level       int      `json:"level"`
+	Origin string `json:"origin"`
+	Refer  string `json:"refer"`
+	URL    string `json:"url"`
+	Level  int    `json:"level"`
+}
+
+type URLItem struct {
+	URL  string
+	Mime string
 }

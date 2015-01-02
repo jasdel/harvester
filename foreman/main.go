@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/apcera/nats"
 	"github.com/jasdel/harvester/internal/queue"
+	"github.com/jasdel/harvester/internal/storage"
 )
 
 func main() {
@@ -16,8 +17,19 @@ func main() {
 		panic(err)
 	}
 
+	sc := storage.NewClient()
+
 	for {
 		item := <-recv.Receive()
+
+		su := sc.ForURL(item.URL)
+
+		if known, _ := su.Known(); !known {
+			su.Add(item.Refer, storage.DefaultURLMime)
+		} else {
+
+		}
+
 		fmt.Println(item)
 		send.Send(item)
 	}
