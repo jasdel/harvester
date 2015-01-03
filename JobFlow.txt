@@ -18,13 +18,6 @@ QueueService receives URL queue add
 	+|-> get next queue item
 +|-> Else if not known
 	+|-> Add URL to known
-
-			|-> If URL is known and is also a refer in known table
-				|-> find Jobs with origin not completed, and mark as completed. (STOP)
-			|-> Else if URL is known but not a refer, and url.has_descendants != null
-				|-> continue
-			|-> Else if URL is not known add to known with no refer.
-
 |-> publish URLQueueItem to worker queue
 |
 v
@@ -35,21 +28,20 @@ Worker Pulls URLQueueItem from queue
 +|-> for each found URL
 	+|-> if URL looks like image insert into know with refer as this page, and remove from URL list
 +|-> create URLQueueItem for each descendant with this URL as a refer and original URLQueueItem's origin, increment level
-
 +|-> If URL has descendants add descendants to know table with refer of this URL.
 +|-> Update this URL as crawled
 +|-> if URLQueueItem has descendants and level <= x
 	+|-> insert descendants into pending table for origin
 +|-> Remove origin+URL from pending table
-|-> Check if origin has anymore entries in pending table
-	|-> find Jobs with origin not completed, and mark as completed
++|-> Check if origin has anymore entries in pending table
+	+|-> find Jobs with origin not completed, and mark as completed
 
 
 TODO:
-|-> Add checking if URL already is known, and don't scan it
-|-> add checking to mark jobs as completed
++|-> Add checking if URL already is known, and don't scan it <= done via crawled flag
++|-> add checking to mark jobs as completed
 |-> Write documentation
-|-> Cleanup/add docuementation
+|-> Cleanup/add documentation
 |-> Upload to github
 |-> publish dock on a online doc page
 |-> Setup server running on jasdel w/ 2 instances of each layer.

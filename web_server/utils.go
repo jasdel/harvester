@@ -25,6 +25,7 @@ func writeJSONError(w http.ResponseWriter, code, msg string, status int) error {
 	return writeJSON(w, ErrorRsp{Code: code, Msg: msg}, status)
 }
 
+// Converts a string into a Job ID validating that it is a valid value
 func jobIdFromString(idStr string) (types.JobId, error) {
 	if idStr == "" {
 		return types.InvalidJobId, fmt.Errorf("No jobId provided")

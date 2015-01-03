@@ -5,9 +5,9 @@ import (
 	"github.com/jasdel/harvester/internal/storage"
 	"github.com/jasdel/harvester/internal/types"
 	"github.com/jasdel/harvester/internal/util"
-	"github.com/zenazn/goji/web"
 	"log"
 	"net/http"
+	"path"
 )
 
 type jobStatusMsg struct {
@@ -26,15 +26,25 @@ type jobStatusMsg struct {
 // Response:
 //	- Success: {completed: 2, pending: 3, elapsed: 5m10s}
 //	- Failure: {code: <code>, message: <message>}
-func routeJobStatus(c web.C, w http.ResponseWriter, r *http.Request) {
-	id, err := jobIdFromString(c.URLParams["jobId"])
+type JobStatusHandler struct {
+	sc *storage.Client
+}
+
+func (h *JobStatusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.Header().Set("Allow", "GET")
+		http.Error(w, "MethodNotAllowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id, err := jobIdFromString(path.Base(r.URL.Path))
 	if err != nil {
 		log.Println("routeJobStatus status request failed.", err)
 		writeJSONError(w, "BadRequest", err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	status, jobErr := jobStatus(id)
+	status, jobErr := h.jobStatus(id)
 	if jobErr != nil {
 		log.Println("routeJobStatus request job status failed.", jobErr)
 		writeJSONError(w, "NotFound", jobErr.Short(), http.StatusNotFound)
@@ -51,11 +61,8 @@ func routeJobStatus(c web.C, w http.ResponseWriter, r *http.Request) {
 
 // Connects to the remote service hosting job information, and
 // the job's current status information.
-func jobStatus(id types.JobId) (*types.JobStatus, *util.Error) {
-	c := storage.NewClient()
-	job := c.ForJob(id)
-
-	status, err := job.Status()
+func (h *JobStatusHandler) jobStatus(id types.JobId) (*types.JobStatus, *util.Error) {
+	status, err := h.sc.ForJob(id).Status()
 	if err != nil {
 		return nil, &util.Error{
 			Source: "jobStatus",

@@ -1,0 +1,16 @@
+{
+	"storage": {
+		"user":   "docker",
+		"pass":   "docker",
+		"dbname": "docker",
+		"host":   "localhost",
+		"port":   24001
+	},
+
+	"pubQueue": {
+		"connURL": "nats://localhost:4222",
+		"topic":   "url_queue"
+	},
+
+	"httpAddr": ":8080"
+}

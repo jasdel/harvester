@@ -1,4 +1,4 @@
-package scraper
+package main
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -25,12 +25,14 @@ var testCases []TestCase = []TestCase{
 data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgH
 
 ">
+<script src="/assets/application-3eb6399a0c53c9273cc25d871fbf02a4.js" type="text/javascript"></script>
 `,
 		Results: []string{
 			"some-URL",
 			"some-url2",
 			"https://www.google.com/imghp?hl=en&amp;tab=wi&amp;authuser=0",
 			"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgH",
+			"/assets/application-3eb6399a0c53c9273cc25d871fbf02a4.js",
 		},
 	},
 

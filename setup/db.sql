@@ -1,11 +1,10 @@
-/*
- Create Tables used by harvester
-*/
+-- Job
 CREATE TABLE IF NOT EXISTS job (
     id           serial                   PRIMARY KEY,
     created_on   TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
+-- Origin URLs from a job
 CREATE TABLE IF NOT EXISTS job_url (
     id           serial PRIMARY KEY,
     job_id       INT    NOT NULL,
@@ -34,6 +33,7 @@ CREATE TABLE IF NOT EXISTS url (
 );
 CREATE UNIQUE INDEX url_pair ON url (url, refer);
 
+-- job URL still pending
 CREATE TABLE IF NOT EXISTS url_pending (
 	id     serial PRIMARY KEY,
 	origin TEXT   NOT NULL,

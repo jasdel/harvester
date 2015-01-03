@@ -5,9 +5,9 @@ import (
 	"github.com/jasdel/harvester/internal/storage"
 	"github.com/jasdel/harvester/internal/types"
 	"github.com/jasdel/harvester/internal/util"
-	"github.com/zenazn/goji/web"
 	"log"
 	"net/http"
+	"path"
 )
 
 // Handles the request checking on the status of a previously scheduled job.
@@ -22,8 +22,18 @@ import (
 // Response:
 //	- Success: {<domain>: [ {Mime: <mime>, URL: <urls>} ]}
 //	- Failure: {code: <code>, message: <message>}
-func routeJobResult(c web.C, w http.ResponseWriter, r *http.Request) {
-	id, err := jobIdFromString(c.URLParams["jobId"])
+type JobResultHandler struct {
+	sc *storage.Client
+}
+
+func (h *JobResultHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.Header().Set("Allow", "GET")
+		http.Error(w, "MethodNotAllowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id, err := jobIdFromString(path.Base(r.URL.Path))
 	if err != nil {
 		log.Println("routeJobStatus status request failed.", err)
 		writeJSONError(w, "BadRequest", err.Error(), http.StatusBadRequest)
@@ -32,7 +42,7 @@ func routeJobResult(c web.C, w http.ResponseWriter, r *http.Request) {
 
 	mimeFilter := r.URL.Query().Get("mime")
 
-	result, jobErr := jobResult(id, mimeFilter)
+	result, jobErr := h.jobResult(id, mimeFilter)
 	if jobErr != nil {
 		log.Println("routeJobResult request job result failed.", jobErr)
 		writeJSONError(w, "NotFound", jobErr.Short(), http.StatusNotFound)
@@ -49,11 +59,8 @@ func routeJobResult(c web.C, w http.ResponseWriter, r *http.Request) {
 // the filter acts as the prefix to a mime content type patter.
 //
 // e.g: mimeFilter := "image" // returns all image URLs
-func jobResult(id types.JobId, mimeFilter string) (types.JobResults, *util.Error) {
-	c := storage.NewClient()
-	job := c.ForJob(id)
-
-	result, err := job.Result(mimeFilter)
+func (h *JobResultHandler) jobResult(id types.JobId, mimeFilter string) (types.JobResults, *util.Error) {
+	result, err := h.sc.ForJob(id).Result(mimeFilter)
 	if err != nil {
 		return nil, &util.Error{
 			Source: "jobResult",

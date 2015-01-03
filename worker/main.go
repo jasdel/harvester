@@ -1,128 +1,90 @@
 package main
 
 import (
+	"encoding/json"
+	"flag"
 	"fmt"
-	"github.com/apcera/nats"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
 	"github.com/jasdel/harvester/internal/types"
-	"github.com/jasdel/harvester/worker/scraper"
 	"log"
-	"net/http"
-	"net/url"
-	"path"
-	"strings"
+	"os"
+	"time"
 )
 
 func main() {
-	queueSend, err := queue.NewPublisher(nats.DefaultURL, "url_queue")
-	if err != nil {
-		panic(err)
-	}
-	defer queueSend.Close()
+	cfgFilename := flag.String("config", "config.json", "The web server configuration file.")
+	flag.Parse()
 
-	queueRecv, err := queue.NewReceiver(nats.DefaultURL, "work_queue")
+	cfg, err := LoadConfig(*cfgFilename)
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
+	}
+
+	// Initialize the queue receiver of the filter URLs from the foreman.
+	// URLs received from this queue will be crawled
+	queueRecv, err := queue.NewReceiver(cfg.RecvQueue.ConnURL, cfg.RecvQueue.Topic)
+	if err != nil {
+		log.Fatalln("Worker Queue Receiver: initialization failed:", err)
 	}
 	defer queueRecv.Close()
 
-	sc := storage.NewClient()
+	// Initialize the queue publisher for publishing descendants of
+	// a previously queued URL to be queued for crawling
+	queuePub, err := queue.NewPublisher(cfg.PubQueue.ConnURL, cfg.PubQueue.Topic)
+	if err != nil {
+		log.Fatalln("Worker Queue Publisher: initialization failed:", err)
+	}
+	defer queuePub.Close()
 
+	// Initialize the storage for determining the status of a URL,
+	// updating URL values, and Job completeness status
+	sc, err := storage.NewClient(cfg.StorageConfig)
+	if err != nil {
+		log.Fatalln("Worker Storage Client: initialization failed:", err)
+	}
+
+	crawler := Crawler{queuePub: queuePub, sc: sc, maxLevel: cfg.MaxLevel}
+
+	log.Println("Ready: Waiting for URL work items...")
 	for {
 		item := <-queueRecv.Receive()
-		doWork(item, sc, queueSend)
+		crawler.crawl(item)
+
+		<-time.After(cfg.WorkDelay)
 	}
 }
 
-func doWork(item *types.URLQueueItem, sc *storage.Client, sender queue.Publisher) {
-	mime, urls, err := scraper.Scrape(item.URL, http.DefaultClient)
-	fmt.Println("Worker: crawled url", item.URL, "mime:", mime, "url count", len(urls), "level", item.Level, "error", err)
-
-	// Update mime type for the URL
-	if err := sc.ForURL(item.URL).Update(mime, true); err != nil {
-		log.Println("Worker doWork, failed to add update URL's mime type", item.URL, mime, err)
-	}
-
-	for i := 0; i < len(urls); i++ {
-		u := urls[i]
-		kind := looksLikeImageURL(urls[i])
-		if kind != "" {
-			// Strip off the image so it isn't queued up
-			urls = append(urls[:i], urls[i+1:]...)
-			continue
-		} else {
-			kind = storage.DefaultURLMime
-		}
-
-		su := sc.ForURL(u)
-
-		if err := su.AddResult(item.Origin, item.URL, kind); err != nil {
-			log.Println("Worker doWork, failed to add result", err, item.Origin, item.URL, u)
-		}
-
-		if item.Level+1 < 2 {
-			q := &types.URLQueueItem{
-				Origin: item.Origin,
-				Refer:  item.URL,
-				URL:    u,
-				Level:  item.Level + 1,
-			}
-			if err := su.AddPending(q.Origin); err != nil {
-				log.Println("Worker doWork, failed to add pending url", err)
-			}
-
-			sender.Send(q)
-		} else if known, _ := su.KnownWithRefer(item.URL); !known {
-			// Only add the URL if it is already not known
-			// set the descendant as known and from this work item's URL, but it will
-			// be marked as not-crawled by by default.
-			if err := su.Add(item.URL, kind); err != nil {
-				log.Println("Worker doWork, failed to add image to know URLs", item.URL, u, err)
-			}
-		}
-	}
-
-	if err := sc.ForURL(item.URL).DeletePending(item.Origin); err != nil {
-		log.Println("Worker doWork, failed to delete pending record for", item.URL, item.Origin)
-	}
-
-	origSU := sc.ForURL(item.Origin)
-	if pending, _ := origSU.HasPending(); !pending {
-		log.Println("Worker, marking origin as complete", item.Origin)
-		if err := origSU.MarkJobURLComplete(); err != nil {
-			log.Println("Worker doWork, failed to mark jobs completed for", item.Origin, err)
-		}
-	}
-
+// TODO document these fields
+type Config struct {
+	StorageConfig storage.ClientConfig `json:"storage"`
+	RecvQueue     types.QueueConfig    `json:"recvQueue"`
+	PubQueue      types.QueueConfig    `json:"pubQueue"`
+	MaxLevel      int                  `json:"maxLevel"`
+	WorkDelayStr  string               `json:"workDelay"`
+	WorkDelay     time.Duration        `json:"-"`
 }
 
-// Attempts to identify if the URL passed in is a image
-// a non-empty string will be returned if the URL looks like
-// an image URL.
-func looksLikeImageURL(u string) string {
-	parsed, err := url.Parse(u)
+// Loads the configuration file from disk in as a JSON blob.
+func LoadConfig(filename string) (Config, error) {
+	cfg := Config{}
+
+	file, err := os.Open(filename)
 	if err != nil {
-		log.Println("Worker looksLikeImageURL failed to parse URL", u)
-		return ""
+		return cfg, err
+	}
+	defer file.Close()
+
+	if err = json.NewDecoder(file).Decode(&cfg); err != nil {
+		return cfg, err
 	}
 
-	ext := path.Ext(parsed.Path)
-	if len(ext) == 0 {
-		return ""
+	cfg.WorkDelay, err = time.ParseDuration(cfg.WorkDelayStr)
+	if err != nil {
+		return cfg, fmt.Errorf("%s, %s", err.Error(), cfg.WorkDelayStr)
+	} else if cfg.WorkDelay < 0 {
+		return cfg, fmt.Errorf("Invalid work delay, must be positive", cfg.WorkDelayStr)
 	}
 
-	// lower and trim the leading '.' from the extension
-	ext = strings.ToLower(ext[1:])
-
-	switch ext {
-	case "gif":
-		return "image/gif"
-	case "jpeg", "jpg":
-		return "image/jpeg"
-	case "png":
-		return "image/png"
-	}
-
-	return ""
+	return cfg, nil
 }

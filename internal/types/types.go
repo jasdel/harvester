@@ -33,3 +33,8 @@ type URLItem struct {
 	URL  string
 	Mime string
 }
+
+type QueueConfig struct {
+	Topic   string `json:"topic"`
+	ConnURL string `json:"connURL"`
+}

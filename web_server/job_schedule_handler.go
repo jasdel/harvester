@@ -3,27 +3,15 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/apcera/nats"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
 	"github.com/jasdel/harvester/internal/types"
 	"github.com/jasdel/harvester/internal/util"
-	"github.com/zenazn/goji/web"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 )
-
-var queuePub queue.Publisher
-
-func init() {
-	var err error
-	queuePub, err = queue.NewPublisher(nats.DefaultURL, "url_queue")
-	if err != nil {
-		panic(err)
-	}
-}
 
 type jobScheduledMsg struct {
 	JobId types.JobId `json:"jobId"`
@@ -34,7 +22,7 @@ type jobScheduledMsg struct {
 // message, or job id if the schedule was successful.
 //
 // e.g:
-// curl -X POST --data-binary @- "http://localhost:8000" << EOF
+// curl -X POST --data-binary @- "http://localhost:8080" << EOF
 // https://www.google.com
 // http://example.com
 // EOF
@@ -42,7 +30,18 @@ type jobScheduledMsg struct {
 // Response:
 //	- Success: {jobId: 1234}
 //	- Failure: {code: <code>, message: <message>}
-func routeScheduleJob(c web.C, w http.ResponseWriter, r *http.Request) {
+type JobScheduleHandler struct {
+	queuePub queue.Publisher
+	sc       *storage.Client
+}
+
+func (h *JobScheduleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.Header().Set("Allow", "POST")
+		http.Error(w, "MethodNotAllowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	urls, err := getRequestedJobURLs(r.Body)
 	if err != nil {
 		log.Println("routeScheduleJob request parse failed", err)
@@ -58,7 +57,7 @@ func routeScheduleJob(c web.C, w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create job by sending the URLs to scheduler
-	id, err := scheduleJob(urls)
+	id, err := h.scheduleJob(urls)
 	if err != nil {
 		log.Println("routeScheduleJob request job schedule failed.", err)
 		writeJSONError(w, "DependancyFailure", err.Short(), http.StatusInternalServerError)
@@ -108,12 +107,11 @@ func getRequestedJobURLs(in io.Reader) ([]string, *util.Error) {
 // Requests that a job be created, and the parts of it be scheduled.
 // a job id will be returned if the job was successfully created, and
 // error if there was a failure.
-func scheduleJob(urls []string) (types.JobId, *util.Error) {
-	c := storage.NewClient()
-	job, err := c.CreateJob(urls)
+func (h *JobScheduleHandler) scheduleJob(urls []string) (types.JobId, *util.Error) {
+	job, err := h.sc.CreateJob(urls)
 	if err != nil {
 		return types.InvalidJobId, &util.Error{
-			Source: "scheduleJob",
+			Source: "JobScheduleHandler.scheduleJob",
 			Info:   fmt.Sprintf("Create Job Failed"),
 			Err:    err,
 		}
@@ -121,10 +119,10 @@ func scheduleJob(urls []string) (types.JobId, *util.Error) {
 
 	go func() {
 		for _, u := range urls {
-			if err := c.ForURL(u).AddPending(u); err != nil {
-				log.Println("web_service: schedule job, failed to add job URL to pending list")
+			if err := h.sc.ForURL(u).AddPending(u); err != nil {
+				log.Println("JobScheduleHandler.scheduleJob: failed to add job URL to pending list")
 			}
-			queuePub.Send(&types.URLQueueItem{Origin: u, URL: u})
+			h.queuePub.Send(&types.URLQueueItem{Origin: u, URL: u})
 		}
 	}()
 

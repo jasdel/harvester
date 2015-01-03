@@ -1,0 +1,22 @@
+{
+	"storage": {
+		"user":   "docker",
+		"pass":   "docker",
+		"dbname": "docker",
+		"host":   "localhost",
+		"port":   24001
+	},
+
+	"recvQueue": {
+		"connURL": "nats://localhost:4222",
+		"topic":   "work_queue"
+	},
+
+	"pubQueue": {
+		"connURL": "nats://localhost:4222",
+		"topic":   "url_queue"
+	},
+
+	"maxLevel": 2,
+	"workDelay": "25ms"
+}
