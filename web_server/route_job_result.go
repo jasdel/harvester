@@ -35,7 +35,7 @@ func routeJobResult(c web.C, w http.ResponseWriter, r *http.Request) {
 	result, jobErr := jobResult(id, mimeFilter)
 	if jobErr != nil {
 		log.Println("routeJobResult request job result failed.", jobErr)
-		writeJSONError(w, "DependancyFailure", jobErr.Short(), http.StatusInternalServerError)
+		writeJSONError(w, "NotFound", jobErr.Short(), http.StatusNotFound)
 		return
 	}
 

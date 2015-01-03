@@ -22,9 +22,7 @@ func writeJSON(w http.ResponseWriter, data interface{}, status int) error {
 
 // Encodes an error message as a JSON object, and writes it back to the client
 func writeJSONError(w http.ResponseWriter, code, msg string, status int) error {
-	return writeJSON(w,
-		ErrorRsp{Code: code, Msg: msg},
-		http.StatusBadRequest)
+	return writeJSON(w, ErrorRsp{Code: code, Msg: msg}, status)
 }
 
 func jobIdFromString(idStr string) (types.JobId, error) {

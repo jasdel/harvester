@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"path"
 	"strings"
-	"time"
 )
 
 func main() {
@@ -33,19 +32,15 @@ func main() {
 	for {
 		item := <-queueRecv.Receive()
 		doWork(item, sc, queueSend)
-
-		// Don't overload endpoints being crawled
-		<-time.After(250 * time.Millisecond)
 	}
-
 }
 
 func doWork(item *types.URLQueueItem, sc *storage.Client, sender queue.Publisher) {
 	mime, urls, err := scraper.Scrape(item.URL, http.DefaultClient)
-	fmt.Println("url", item.URL, "mime:", mime, "url count", len(urls), "err:", err)
+	fmt.Println("Worker: crawled url", item.URL, "mime:", mime, "url count", len(urls), "level", item.Level, "error", err)
 
 	// Update mime type for the URL
-	if err := sc.ForURL(item.URL).Update(mime, len(urls) > 0); err != nil {
+	if err := sc.ForURL(item.URL).Update(mime, true); err != nil {
 		log.Println("Worker doWork, failed to add update URL's mime type", item.URL, mime, err)
 	}
 
@@ -55,19 +50,12 @@ func doWork(item *types.URLQueueItem, sc *storage.Client, sender queue.Publisher
 		if kind != "" {
 			// Strip off the image so it isn't queued up
 			urls = append(urls[:i], urls[i+1:]...)
+			continue
 		} else {
 			kind = storage.DefaultURLMime
 		}
 
 		su := sc.ForURL(u)
-
-		// Only add the URL if it is already not known
-		if known, _ := su.KnownWithRefer(item.URL); !known {
-			// set the descendant as known and from this work item's URL
-			if err := su.Add(item.URL, kind); err != nil {
-				log.Println("Worker doWork, failed to add image to know URLs", item.URL, u, err)
-			}
-		}
 
 		if err := su.AddResult(item.Origin, item.URL, kind); err != nil {
 			log.Println("Worker doWork, failed to add result", err, item.Origin, item.URL, u)
@@ -85,6 +73,25 @@ func doWork(item *types.URLQueueItem, sc *storage.Client, sender queue.Publisher
 			}
 
 			sender.Send(q)
+		} else if known, _ := su.KnownWithRefer(item.URL); !known {
+			// Only add the URL if it is already not known
+			// set the descendant as known and from this work item's URL, but it will
+			// be marked as not-crawled by by default.
+			if err := su.Add(item.URL, kind); err != nil {
+				log.Println("Worker doWork, failed to add image to know URLs", item.URL, u, err)
+			}
+		}
+	}
+
+	if err := sc.ForURL(item.URL).DeletePending(item.Origin); err != nil {
+		log.Println("Worker doWork, failed to delete pending record for", item.URL, item.Origin)
+	}
+
+	origSU := sc.ForURL(item.Origin)
+	if pending, _ := origSU.HasPending(); !pending {
+		log.Println("Worker, marking origin as complete", item.Origin)
+		if err := origSU.MarkJobURLComplete(); err != nil {
+			log.Println("Worker doWork, failed to mark jobs completed for", item.Origin, err)
 		}
 	}
 
@@ -115,7 +122,6 @@ func looksLikeImageURL(u string) string {
 		return "image/jpeg"
 	case "png":
 		return "image/png"
-
 	}
 
 	return ""

@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 type URL struct {
@@ -34,6 +35,17 @@ func (u *URL) KnownWithRefer(refer string) (bool, error) {
 	return known.Valid && known.Bool, nil
 }
 
+const queryURLCrawled = `SELECT exists(SELECT 1 FROM url WHERE url = $1 AND crawled = TRUE)`
+
+func (u *URL) Crawled() (bool, error) {
+	var crawled sql.NullBool
+	if err := u.client.db.QueryRow(queryURLCrawled, u.url).Scan(&crawled); err != nil {
+		return false, err
+	}
+
+	return crawled.Valid && crawled.Bool, nil
+}
+
 const queryURLAdd = `INSERT INTO url (url, refer, mime) VALUES ($1, $2, $3)`
 
 // Adds a URL to the database for a specific URL/refer combination.
@@ -55,11 +67,22 @@ func (u *URL) Update(mime string, crawled bool) error {
 	return nil
 }
 
+const queryURLAddPending = `INSERT INTO url_pending (url,origin) VALUES ($1, $2)`
+
 func (u *URL) AddPending(origin string) error {
+	fmt.Println("Inserting into pending", u.url, origin)
+	if _, err := u.client.db.Exec(queryURLAddPending, u.url, origin); err != nil {
+		return err
+	}
 	return nil
 }
 
+const queryURLDeletePending = `DELETE FROM url_pending WHERE url = $1 AND origin = $2`
+
 func (u *URL) DeletePending(origin string) error {
+	if _, err := u.client.db.Exec(queryURLDeletePending, u.url, origin); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -77,6 +100,27 @@ func (u *URL) AddResult(origin, refer, mime string) error {
 	}
 
 	if _, err := u.client.db.Exec(queryURLInsertResult, u.url, jobId.Int64, refer, mime); err != nil {
+		return err
+	}
+	return nil
+}
+
+const queryURLHasPending = `SELECT exists(SELECT 1 FROM url_pending WHERE origin = $1)`
+
+func (u *URL) HasPending() (bool, error) {
+	var pending sql.NullBool
+	if err := u.client.db.QueryRow(queryURLHasPending, u.url).Scan(&pending); err != nil {
+		return false, err
+	}
+
+	return pending.Valid && pending.Bool, nil
+}
+
+const queryURLJobURComplete = `UPDATE job_url SET completed_on = $1 WHERE url = $2 AND completed_on IS NULL`
+
+func (u *URL) MarkJobURLComplete() error {
+	curTime := time.Now().UTC()
+	if _, err := u.client.db.Exec(queryURLJobURComplete, curTime, u.url); err != nil {
 		return err
 	}
 	return nil

@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"regexp"
+	"strings"
 )
 
 const (
@@ -46,7 +47,7 @@ func findURLs(doc []byte, reg *regexp.Regexp) []string {
 		for j := 1; j < len(matchGroup); j++ {
 			// Skip the first index since it is the full matched phrase, not the sub match
 			if len(matchGroup[j]) > 0 {
-				urls = append(urls, string(matchGroup[j]))
+				urls = append(urls, strings.TrimSpace(string(matchGroup[j])))
 			}
 		}
 	}

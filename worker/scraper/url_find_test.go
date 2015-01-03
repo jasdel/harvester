@@ -21,11 +21,16 @@ var testCases []TestCase = []TestCase{
 <a href="some-URL">url</a>
 <img src="some-url2"/>
 <a class="gb_f" href="https://www.google.com/imghp?hl=en&amp;tab=wi&amp;authuser=0" data-pid="2">Images</a>
+<img alt="Learning Resources Pretend &amp;amp; Play School Set" src="
+data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgH
+
+">
 `,
 		Results: []string{
 			"some-URL",
 			"some-url2",
 			"https://www.google.com/imghp?hl=en&amp;tab=wi&amp;authuser=0",
+			"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgH",
 		},
 	},
 
@@ -60,7 +65,7 @@ var url = '//example.com'
 func TestFindURLs(t *testing.T) {
 	for i, c := range testCases {
 		urls := c.Fn([]byte(c.Input))
-		require.Equal(t, len(c.Results), len(urls), "%s:%d: Expect number of results to match", c.Desc, i)
+		require.Equal(t, len(c.Results), len(urls), "%s:%d: Expect number of results to match", c.Desc, i, urls)
 		for j, u := range urls {
 			assert.Equal(t, c.Results[j], u, "%s:%d:%d: Expected URL found to match", c.Desc, i, j)
 		}

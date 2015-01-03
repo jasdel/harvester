@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path"
@@ -78,6 +79,10 @@ func validateContent(resp *http.Response) (mime string, body []byte, err error) 
 // URL the origin's values will be substituted in their place.
 // If the URL has a relative path the path of the origin will be pre-pended.
 func normalizeURL(origin *url.URL, u string) (string, error) {
+	if strings.HasPrefix(u, "data:") {
+		return "", fmt.Errorf("not URL link")
+	}
+
 	normURL, err := url.Parse(u)
 	if err != nil {
 		return "", err

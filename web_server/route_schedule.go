@@ -121,6 +121,9 @@ func scheduleJob(urls []string) (types.JobId, *util.Error) {
 
 	go func() {
 		for _, u := range urls {
+			if err := c.ForURL(u).AddPending(u); err != nil {
+				log.Println("web_service: schedule job, failed to add job URL to pending list")
+			}
 			queuePub.Send(&types.URLQueueItem{Origin: u, URL: u})
 		}
 	}()

@@ -63,4 +63,6 @@ func TestNomralizeURL(t *testing.T) {
 	assert.Nil(t, err, "No error")
 	assert.Equal(t, "https://example.come/blah/blah/sports/", u, "Expect URLs to match.")
 
+	u, err = normalizeURL(origin, "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgH")
+	assert.NotNil(t, err, "Data URI should be reject")
 }

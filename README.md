@@ -44,6 +44,7 @@ Parts:
 - Workers could re-queue URLs which fail with 50x status of connection errors, and try again later.
 - Workers could support gzip so that the request payloads are smaller
 - Workers should use headless browser for crawling so that accurate link following, and JS functionality is supported.
+- Usage of database optimized so fewer write queries are made
 
 # Usage #
 ---------

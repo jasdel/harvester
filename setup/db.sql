@@ -39,3 +39,4 @@ CREATE TABLE IF NOT EXISTS url_pending (
 	origin TEXT   NOT NULL,
 	url    TEXT   NOT NULL
 );
+CREATE UNIQUE INDEX url_pending_pair ON url_pending (url, origin);

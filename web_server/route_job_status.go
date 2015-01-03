@@ -37,7 +37,7 @@ func routeJobStatus(c web.C, w http.ResponseWriter, r *http.Request) {
 	status, jobErr := jobStatus(id)
 	if jobErr != nil {
 		log.Println("routeJobStatus request job status failed.", jobErr)
-		writeJSONError(w, "DependancyFailure", jobErr.Short(), http.StatusInternalServerError)
+		writeJSONError(w, "NotFound", jobErr.Short(), http.StatusNotFound)
 		return
 	}
 
