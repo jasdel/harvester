@@ -15,12 +15,11 @@ type JobStatus struct {
 	Elapsed   time.Duration
 }
 
-type JobResults map[string][]JobResult
-
 type JobResult struct {
 	Mime string `json:"mime"`
 	URL  string `json:"url"`
 }
+type JobResults map[string][]JobResult
 
 type URLQueueItem struct {
 	Origin string `json:"origin"`

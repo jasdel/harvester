@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 )
 
 type Crawler struct {
@@ -17,24 +18,43 @@ type Crawler struct {
 	maxLevel int
 }
 
-func (c Crawler) crawl(item *types.URLQueueItem) {
+func NewCrawler(queuePub queue.Publisher, sc *storage.Client, maxLevel int) *Crawler {
+	return &Crawler{
+		queuePub: queuePub,
+		sc:       sc,
+		maxLevel: maxLevel,
+	}
+}
+
+func (c *Crawler) crawl(item *types.URLQueueItem) {
+	startedAt := time.Now()
 	mime, urls, err := Scrape(item.URL, http.DefaultClient)
 
-	log.Println("Worker: crawled URL", item.URL, "mime:", mime, "descendant count", len(urls), "level", item.Level, "error", err)
+	log.Println("Worker crawl: Scape URL", item.URL, "mime:", mime, "level", item.Level, "descendants", len(urls), "duration", time.Now().Sub(startedAt).String(), "error", err)
 
 	// Update mime type for the URL
 	if err := c.sc.ForURL(item.URL).Update(mime, true); err != nil {
-		log.Println("Worker doWork, failed to add update URL's mime type", item.URL, mime, err)
+		log.Println("Worker crawl: failed to add update URL's mime type", item.URL, mime, err)
 	}
 
+	// Collect the job ids for this origin so their results can be updated
+	jobIdsForOrigin, err := c.sc.ForURL(item.Origin).GetJobIds()
+	if err != nil {
+		log.Println("Worker crawl: origin has no associated jobId", item.Origin)
+		return
+	}
+
+	startedAt = time.Now()
 	for i := 0; i < len(urls); i++ {
 		u := urls[i]
 
 		kind := guessURLsMime(u)
 
 		su := c.sc.ForURL(u)
-		if err := su.AddResult(item.Origin, item.URL, kind); err != nil {
-			log.Println("Worker doWork, failed to add result", err, item.Origin, item.URL, u)
+		for _, id := range jobIdsForOrigin {
+			if err := su.AddResult(id, item.Origin, item.URL, kind); err != nil {
+				log.Println("Worker crawl: failed to add result", err, item.Origin, item.URL, u)
+			}
 		}
 
 		if canSkipMime(kind) {
@@ -51,14 +71,13 @@ func (c Crawler) crawl(item *types.URLQueueItem) {
 				Level:  item.Level + 1,
 			}
 			if err := su.AddPending(q.Origin); err != nil {
-				log.Println("Worker doWork, failed to add pending url", err)
+				log.Println("Worker crawl: failed to add pending URL", err)
 			}
 
 			c.queuePub.Send(q)
 		} else if known, _ := su.KnownWithRefer(item.URL); !known {
-			// Only add the URL if it is already not known
-			// set the descendant as known and from this work item's URL, but it will
-			// be marked as not-crawled by by default.
+			// Only add the URL if it is already not known set the descendant as known
+			// and from this work item's URL, but it will be marked as not-crawled by by default.
 			if err := su.Add(item.URL, kind); err != nil {
 				log.Println("Worker doWork, failed to add image to know URLs", item.URL, u, err)
 			}
@@ -66,16 +85,18 @@ func (c Crawler) crawl(item *types.URLQueueItem) {
 	}
 
 	if err := c.sc.ForURL(item.URL).DeletePending(item.Origin); err != nil {
-		log.Println("Worker doWork, failed to delete pending record for", item.URL, item.Origin)
+		log.Println("Worker crawl: failed to delete pending record for", item.URL, item.Origin)
 	}
 
 	origSU := c.sc.ForURL(item.Origin)
 	if pending, _ := origSU.HasPending(); !pending {
-		log.Println("Worker, marking origin as complete", item.Origin)
+		log.Println("Worker crawl: marking origin as complete", item.Origin)
 		if err := origSU.MarkJobURLComplete(); err != nil {
 			log.Println("Worker doWork, failed to mark jobs completed for", item.Origin, err)
 		}
 	}
+
+	log.Println("Finished crawling of", item.URL, "duration", time.Now().Sub(startedAt).String())
 
 }
 

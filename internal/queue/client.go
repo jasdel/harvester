@@ -13,7 +13,7 @@ type client struct {
 
 type Publisher interface {
 	Close()
-	Send(item *types.URLQueueItem)
+	Send(item ...*types.URLQueueItem)
 }
 type Receiver interface {
 	Close()
@@ -67,8 +67,10 @@ func (c *client) Close() {
 }
 
 // Adds a new URLQueueItem to the queue
-func (c *client) Send(item *types.URLQueueItem) {
-	c.sendCh <- item
+func (c *client) Send(items ...*types.URLQueueItem) {
+	for i := 0; i < len(items); i++ {
+		c.sendCh <- items[i]
+	}
 }
 
 // Returns a read only channel to send URLQueueItem to

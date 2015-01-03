@@ -54,6 +54,7 @@ func main() {
 			log.Println("Foreman: URL already known and crawled, skipping", item.URL, item.Origin, item.Level)
 			su.DeletePending(item.Origin)
 			// TODO need to check if this was the last job, and if so mark as complete
+			// Get all URLs where this URL is the refer, and enqueue them
 			continue
 		} else if known, _ := su.Known(); !known {
 			su.Add(item.Refer, storage.DefaultURLMime)

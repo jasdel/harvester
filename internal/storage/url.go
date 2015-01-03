@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"github.com/jasdel/harvester/internal/types"
 	"time"
 )
 
@@ -86,20 +87,10 @@ func (u *URL) DeletePending(origin string) error {
 	return nil
 }
 
-const queryURLJobURLOrigin = `SELECT job_id FROM job_url WHERE url = $1 AND completed_on IS NULL`
-const queryURLInsertResult = `INSERT INTO job_result (url, job_id, refer, mime) VALUES ($1, $2, $3, $4)`
+const queryURLInsertResult = `INSERT INTO job_result (url, job_id, origin, refer, mime) VALUES ($1, $2, $3, $4, $5)`
 
-func (u *URL) AddResult(origin, refer, mime string) error {
-	var jobId sql.NullInt64
-
-	if err := u.client.db.QueryRow(queryURLJobURLOrigin, origin).Scan(&jobId); err != nil {
-		return err
-	}
-	if !jobId.Valid {
-		return fmt.Errorf("URL origin not known as job, %s", origin)
-	}
-
-	if _, err := u.client.db.Exec(queryURLInsertResult, u.url, jobId.Int64, refer, mime); err != nil {
+func (u *URL) AddResult(jobId types.JobId, origin, refer, mime string) error {
+	if _, err := u.client.db.Exec(queryURLInsertResult, u.url, jobId, origin, refer, mime); err != nil {
 		return err
 	}
 	return nil
@@ -124,4 +115,31 @@ func (u *URL) MarkJobURLComplete() error {
 		return err
 	}
 	return nil
+}
+
+const queryURLJobURLOrigin = `SELECT job_id FROM job_url WHERE url = $1 AND completed_on IS NULL`
+
+func (u *URL) GetJobIds() ([]types.JobId, error) {
+	rows, err := u.client.db.Query(queryURLJobURLOrigin, u.url)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	jobIds := []types.JobId{}
+	for rows.Next() {
+		var id sql.NullInt64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		if !id.Valid {
+			return nil, fmt.Errorf("No job id for url", u.url)
+		}
+		jobIds = append(jobIds, types.JobId(id.Int64))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return jobIds, nil
 }

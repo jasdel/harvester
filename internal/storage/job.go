@@ -63,7 +63,7 @@ func (j *Job) Status() (*types.JobStatus, error) {
 	return status, nil
 }
 
-const queryJobResult = `SELECT refer,url,mime FROM job_result WHERE job_id = $1 AND mime like $2`
+const queryJobResult = `SELECT origin,url,mime FROM job_result WHERE job_id = $1 AND mime like $2`
 
 // Queries the results images for each image URL
 func (j *Job) Result(mimeFilter string) (types.JobResults, error) {
@@ -76,22 +76,22 @@ func (j *Job) Result(mimeFilter string) (types.JobResults, error) {
 	result := make(types.JobResults)
 
 	for rows.Next() {
-		var refer sql.NullString
+		var origin sql.NullString
 		var u sql.NullString
 		var mime sql.NullString
-		if err := rows.Scan(&refer, &u, &mime); err != nil {
+		if err := rows.Scan(&origin, &u, &mime); err != nil {
 			return nil, err
 		}
-		if !refer.Valid || !u.Valid {
+		if !origin.Valid || !u.Valid {
 			// Invalid mimes are ignored, because they might be null, if the URL
 			// wasn't crawled deeper.
 			return nil, fmt.Errorf("Invalid job result for job id %d", j.id)
 		}
 
-		if _, ok := result[refer.String]; !ok {
-			result[refer.String] = []types.JobResult{}
+		if _, ok := result[origin.String]; !ok {
+			result[origin.String] = []types.JobResult{}
 		}
-		result[refer.String] = append(result[refer.String], types.JobResult{Mime: mime.String, URL: u.String})
+		result[origin.String] = append(result[origin.String], types.JobResult{Mime: mime.String, URL: u.String})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

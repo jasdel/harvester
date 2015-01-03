@@ -79,11 +79,13 @@ func LoadConfig(filename string) (Config, error) {
 		return cfg, err
 	}
 
-	cfg.WorkDelay, err = time.ParseDuration(cfg.WorkDelayStr)
-	if err != nil {
-		return cfg, fmt.Errorf("%s, %s", err.Error(), cfg.WorkDelayStr)
-	} else if cfg.WorkDelay < 0 {
-		return cfg, fmt.Errorf("Invalid work delay, must be positive", cfg.WorkDelayStr)
+	if cfg.WorkDelayStr != "" {
+		cfg.WorkDelay, err = time.ParseDuration(cfg.WorkDelayStr)
+		if err != nil {
+			return cfg, fmt.Errorf("%s, %s", err.Error(), cfg.WorkDelayStr)
+		} else if cfg.WorkDelay < 0 {
+			return cfg, fmt.Errorf("Invalid work delay, must be positive", cfg.WorkDelayStr)
+		}
 	}
 
 	return cfg, nil
