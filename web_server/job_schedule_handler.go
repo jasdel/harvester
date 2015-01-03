@@ -75,7 +75,7 @@ func (h *JobScheduleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func getRequestedJobURLs(in io.Reader) ([]string, *util.Error) {
 	scanner := bufio.NewScanner(in)
 
-	urls := []string{}
+	urlMap := make(map[string]struct{})
 	for scanner.Scan() {
 		if scanner.Text() == "" {
 			continue
@@ -89,7 +89,7 @@ func getRequestedJobURLs(in io.Reader) ([]string, *util.Error) {
 				Err:    err,
 			}
 		}
-		urls = append(urls, u)
+		urlMap[u] = struct{}{}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, &util.Error{
@@ -99,7 +99,7 @@ func getRequestedJobURLs(in io.Reader) ([]string, *util.Error) {
 		}
 	}
 
-	return urls, nil
+	return util.ArrayifyMap(urlMap), nil
 }
 
 // Validates the job URL contains at least a host and scheme. The scheme is also validated

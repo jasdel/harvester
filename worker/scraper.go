@@ -3,12 +3,16 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"github.com/jasdel/harvester/internal/util"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
 )
 
+// Requests, and scrapes the content of a URL. The URL's content will only be scrapped
+// if its returned Content-Type (mime) is text/html. The list of URLs will also be
+// de-duped preventing duplicate entries.
 func Scrape(tgtURL string, client *http.Client) (mime string, urls []string, err error) {
 	var body []byte
 	mime, body, err = requestContent(client, tgtURL)
@@ -16,24 +20,26 @@ func Scrape(tgtURL string, client *http.Client) (mime string, urls []string, err
 		return "", nil, err
 	}
 
-	if body == nil {
+	if body == nil || mime != "text/html" {
+		// ONly valid body responses, or HTML documents are scrapped
 		return mime, []string{}, nil
 	}
 
 	tgtURLParsed, _ := url.Parse(tgtURL)
-	urls = findHTMLDocURLs(body)
-	for i := 0; i < len(urls); i++ {
-		if u, err := normalizeURL(tgtURLParsed, urls[i]); err != nil {
+	foundUrls := findHTMLDocURLs(body)
+
+	urlMap := make(map[string]struct{})
+	for _, u := range foundUrls {
+		if u, err := normalizeURL(tgtURLParsed, u); err != nil {
 			// Drop URL if it is unable to be normalized, because it means
 			// they are not valid URLs
-			urls = append(urls[:i], urls[i+1:]...)
+			continue
 		} else {
-			// Update to the newly normalized URL.
-			urls[i] = u
+			urlMap[u] = struct{}{}
 		}
 	}
 
-	return mime, urls, nil
+	return mime, util.ArrayifyMap(urlMap), nil
 }
 
 // Requests content from a URL and returns the properties of that content along with its body.
