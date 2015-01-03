@@ -39,11 +39,11 @@ Parts:
 # Possible Improvements #
 -------------------------
 - Update logging statement to dynamically get file, function and line number for error messages
-- Workers use per domain rate limiting
-- Workers parse, and respect the robots.txt file
-- Workers could re-queue URLs which fail with 50x status of connection errors, and try again later.
+- Workers use per domain throttling
+- Workers parse, and respect servers robots.txt file
+- Workers could re-queue URLs which fail with 50x status or connection errors, and try again later.
 - Workers could support gzip so that the request payloads are smaller
-- Workers should use headless browser for crawling so that accurate link following, and JS functionality is supported.
+- Workers could use headless browser for crawling so dynamic JS pages could be crawled.
 - Usage of database optimized so fewer write queries are made
 
 # Usage #

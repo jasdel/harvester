@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type jobScheduledMsg struct {
@@ -79,19 +80,16 @@ func getRequestedJobURLs(in io.Reader) ([]string, *util.Error) {
 		if scanner.Text() == "" {
 			continue
 		}
-		u, err := url.Parse(scanner.Text())
-		if err != nil || u.Host == "" || (u.Scheme != "" && u.Scheme != "http" && u.Scheme != "https") {
+
+		u, err := validateJobURL(scanner.Text())
+		if err != nil {
 			return nil, &util.Error{
 				Source: "getRequestedJobURLs",
 				Info:   fmt.Sprintf("Invalid URL: %s", scanner.Text()),
 				Err:    err,
 			}
 		}
-		if u.Scheme == "" {
-			// set default scheme if non are provided, so the input could be www.example.com
-			u.Scheme = "http"
-		}
-		urls = append(urls, u.String())
+		urls = append(urls, u)
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, &util.Error{
@@ -102,6 +100,27 @@ func getRequestedJobURLs(in io.Reader) ([]string, *util.Error) {
 	}
 
 	return urls, nil
+}
+
+// Validates the job URL contains at least a host and scheme. The scheme is also validated
+// as being http or https. If no scheme is provided http will be used as the default.
+func validateJobURL(jobURL string) (string, error) {
+	if strings.HasPrefix(jobURL, "/") {
+		return "", fmt.Errorf("Invalid URL, does not have host")
+	}
+
+	u, err := url.Parse(jobURL)
+	if err != nil {
+		return "", err
+	}
+	if u.Scheme != "" && u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("Invalid URL scheme")
+	}
+	if u.Scheme == "" {
+		// set default scheme if non are provided, so the input could be www.example.com
+		u.Scheme = "http"
+	}
+	return u.String(), nil
 }
 
 // Requests that a job be created, and the parts of it be scheduled.

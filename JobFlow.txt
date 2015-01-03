@@ -8,7 +8,7 @@ URLQueueItem {
 Web Server Receives Job request
 +|-> Creates Job in DB, with Job's URLs
 +|-> Validates URLs look valid
-+|-> calls queue.Send({origin:url[i], level:0}) for each url
++|-> publish URLQueueItem to the queue service (foreman)
 |
 v
 QueueService receives URL queue add
@@ -18,7 +18,7 @@ QueueService receives URL queue add
 	+|-> get next queue item
 +|-> Else if not known
 	+|-> Add URL to known
-|-> publish URLQueueItem to worker queue
++|-> publish URLQueueItem to worker queue
 |
 v
 Worker Pulls URLQueueItem from queue
@@ -40,8 +40,13 @@ Worker Pulls URLQueueItem from queue
 TODO:
 +|-> Add checking if URL already is known, and don't scan it <= done via crawled flag
 +|-> add checking to mark jobs as completed
-|-> Write documentation
-|-> Cleanup/add documentation
+|-> Update SQL table def so URLs are primary keys, or indexes.
+-|-> Cleanup/add documentation
+	|-> crawler needs to be split into testable units
+	+|-> add tests for web server logic, util and getRequestedJobURLs
+|-> Write up documentation
+	|-> design decisions, shortcomings, possible improvements,
+	|-> make sure the architecture and code is clearly documented
 |-> Upload to github
 |-> publish dock on a online doc page
 |-> Setup server running on jasdel w/ 2 instances of each layer.
