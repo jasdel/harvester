@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/jasdel/harvester/internal/util"
 	"net/http"
 	"net/url"
 	"path"
@@ -21,7 +20,7 @@ func Scrape(tgtURL string, client *http.Client) (mime string, urls []string, err
 	}
 
 	if body == nil || mime != "text/html" {
-		// ONly valid body responses, or HTML documents are scrapped
+		// Only valid body responses, or HTML documents are scrapped
 		return mime, []string{}, nil
 	}
 
@@ -29,17 +28,19 @@ func Scrape(tgtURL string, client *http.Client) (mime string, urls []string, err
 	foundUrls := findHTMLDocURLs(body)
 
 	urlMap := make(map[string]struct{})
+	urls = []string{}
 	for _, u := range foundUrls {
 		if u, err := normalizeURL(tgtURLParsed, u); err != nil {
 			// Drop URL if it is unable to be normalized, because it means
 			// they are not valid URLs
 			continue
-		} else {
-			urlMap[u] = struct{}{}
+		} else if _, ok := urlMap[u]; !ok {
+			// Prevent duplicate entries
+			urls = append(urls, u)
 		}
 	}
 
-	return mime, util.ArrayifyMap(urlMap), nil
+	return mime, urls, nil
 }
 
 // Requests content from a URL and returns the properties of that content along with its body.

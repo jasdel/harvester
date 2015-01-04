@@ -3,10 +3,9 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/jasdel/harvester/internal/common"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
-	"github.com/jasdel/harvester/internal/types"
-	"github.com/jasdel/harvester/internal/util"
 	"io"
 	"log"
 	"net/http"
@@ -15,7 +14,7 @@ import (
 )
 
 type jobScheduledMsg struct {
-	JobId types.JobId `json:"jobId"`
+	JobId common.JobId `json:"jobId"`
 }
 
 // Handles the request to schedule a new job. Expects a new line separated
@@ -72,10 +71,11 @@ func (h *JobScheduleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Reads the input scanning for URLs. It expects a single URL per
 // line. If there is a failure reading from the input, or a invalid
 // URL is encountered an error will be returned.
-func getRequestedJobURLs(in io.Reader) ([]string, *util.Error) {
+func getRequestedJobURLs(in io.Reader) ([]string, *ErroMsg) {
 	scanner := bufio.NewScanner(in)
 
 	urlMap := make(map[string]struct{})
+	urls := []string{}
 	for scanner.Scan() {
 		if scanner.Text() == "" {
 			continue
@@ -83,23 +83,26 @@ func getRequestedJobURLs(in io.Reader) ([]string, *util.Error) {
 
 		u, err := validateJobURL(scanner.Text())
 		if err != nil {
-			return nil, &util.Error{
+			return nil, &ErroMsg{
 				Source: "getRequestedJobURLs",
 				Info:   fmt.Sprintf("Invalid URL: %s", scanner.Text()),
 				Err:    err,
 			}
 		}
-		urlMap[u] = struct{}{}
+		if _, ok := urlMap[u]; ok {
+			continue
+		}
+		urls = append(urls, u)
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, &util.Error{
+		return nil, &ErroMsg{
 			Source: "getRequestedJobURLs",
 			Info:   "Unexpected error in input",
 			Err:    err,
 		}
 	}
 
-	return util.ArrayifyMap(urlMap), nil
+	return urls, nil
 }
 
 // Validates the job URL contains at least a host and scheme. The scheme is also validated
@@ -126,10 +129,10 @@ func validateJobURL(jobURL string) (string, error) {
 // Requests that a job be created, and the parts of it be scheduled.
 // a job id will be returned if the job was successfully created, and
 // error if there was a failure.
-func (h *JobScheduleHandler) scheduleJob(urls []string) (types.JobId, *util.Error) {
+func (h *JobScheduleHandler) scheduleJob(urls []string) (common.JobId, *ErroMsg) {
 	job, err := h.sc.JobClient().CreateJob(urls)
 	if err != nil {
-		return types.InvalidJobId, &util.Error{
+		return common.InvalidJobId, &ErroMsg{
 			Source: "JobScheduleHandler.scheduleJob",
 			Info:   fmt.Sprintf("Create Job Failed"),
 			Err:    err,
@@ -141,7 +144,7 @@ func (h *JobScheduleHandler) scheduleJob(urls []string) (types.JobId, *util.Erro
 			if err := h.sc.URLClient().AddPending(u.URL, u.URL); err != nil {
 				log.Println("JobScheduleHandler.scheduleJob: failed to add job URL to pending list")
 			}
-			h.urlQueuePub.Send(&types.URLQueueItem{Origin: u.URL, URL: u.URL})
+			h.urlQueuePub.Send(&common.URLQueueItem{Origin: u.URL, URL: u.URL})
 		}
 	}()
 

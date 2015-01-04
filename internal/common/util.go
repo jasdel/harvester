@@ -1,4 +1,4 @@
-package util
+package common
 
 import (
 	"log"
@@ -6,28 +6,6 @@ import (
 	"path"
 	"strings"
 )
-
-// Converts a map of empty struct with string key to structure to an array of keys
-func ArrayifyMap(in map[string]struct{}) []string {
-	o := make([]string, len(in))
-	i := 0
-	for k, _ := range in {
-		o[i] = k
-		i++
-	}
-	return o
-}
-
-// Removes duplicates from a string array. Returning a new array with
-// duplicates removed
-func DeDupeStringArray(in []string) []string {
-	m := make(map[string]struct{})
-	for _, v := range in {
-		m[v] = struct{}{}
-	}
-
-	return ArrayifyMap(m)
-}
 
 // Attempts to identify the content of the URL points to based on
 // the URI path's extension.

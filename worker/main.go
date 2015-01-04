@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/jasdel/harvester/internal/common"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
-	"github.com/jasdel/harvester/internal/types"
 	"log"
 	"os"
 	"time"
@@ -58,8 +58,8 @@ func main() {
 // TODO document these fields
 type Config struct {
 	StorageConfig storage.ClientConfig `json:"storage"`
-	WorkQueue     types.QueueConfig    `json:"workQueue"`
-	URLQueue      types.QueueConfig    `json:"urlQueue"`
+	WorkQueue     common.QueueConfig   `json:"workQueue"`
+	URLQueue      common.QueueConfig   `json:"urlQueue"`
 	MaxLevel      int                  `json:"maxLevel"`
 	WorkDelayStr  string               `json:"workDelay"`
 	WorkDelay     time.Duration        `json:"-"`

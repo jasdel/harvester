@@ -3,9 +3,9 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"github.com/jasdel/harvester/internal/common"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
-	"github.com/jasdel/harvester/internal/types"
 	"log"
 	"net/http"
 	"os"
@@ -59,7 +59,7 @@ func main() {
 
 type Config struct {
 	StorageConfig storage.ClientConfig `json:"storage"`
-	URLQueue      types.QueueConfig    `json:"urlQueue"`
+	URLQueue      common.QueueConfig   `json:"urlQueue"`
 	HTTPAddr      string               `json:"httpAddr"`
 }
 

@@ -1,10 +1,10 @@
-package util
+package main
 
 import (
 	"fmt"
 )
 
-type Error struct {
+type ErroMsg struct {
 	Source string
 	Info   string
 	Err    error
@@ -12,7 +12,7 @@ type Error struct {
 
 // Converts the Error into a string containing all information about
 // The error
-func (e *Error) Error() string {
+func (e *ErroMsg) Error() string {
 	if e.Err != nil {
 		return fmt.Sprintf("%s %s %s", e.Source, e.Info, e.Err.Error())
 	}
@@ -20,11 +20,11 @@ func (e *Error) Error() string {
 }
 
 // Converts the Error into a short string containing only the brief info
-func (e *Error) Short() string {
+func (e *ErroMsg) Short() string {
 	return e.Info
 }
 
 // Same as Error call, just satisfies the Stringer interface
-func (e *Error) String() string {
+func (e *ErroMsg) String() string {
 	return e.Error()
 }

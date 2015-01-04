@@ -1,10 +1,9 @@
 package main
 
 import (
+	"github.com/jasdel/harvester/internal/common"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
-	"github.com/jasdel/harvester/internal/types"
-	"github.com/jasdel/harvester/internal/util"
 	"log"
 	"net/http"
 	"time"
@@ -24,7 +23,7 @@ func NewCrawler(urlQueuePub queue.Publisher, sc *storage.Client, maxLevel int) *
 	}
 }
 
-func (c *Crawler) Crawl(item *types.URLQueueItem) {
+func (c *Crawler) Crawl(item *common.URLQueueItem) {
 	startedAt := time.Now()
 	urlClient := c.sc.URLClient()
 	defer func() {
@@ -79,7 +78,7 @@ func (c *Crawler) Crawl(item *types.URLQueueItem) {
 	for i := 0; i < len(urls); i++ {
 		u := urls[i]
 
-		kind := util.GuessURLsMime(u)
+		kind := common.GuessURLsMime(u)
 		if url, _ := urlClient.GetURLWithRefer(u, item.URL); url == nil {
 			// Only add the URL if it is already not known set the descendant as known
 			// and from this work item's URL, but it will be marked as not-crawled by by default.
@@ -94,14 +93,14 @@ func (c *Crawler) Crawl(item *types.URLQueueItem) {
 			}
 		}
 
-		if util.CanSkipMime(kind) {
+		if common.CanSkipMime(kind) {
 			urls = append(urls[:i], urls[i+1:]...)
 			i-- // Step back on to pick up what would of been the item at the next index.
 			continue
 		}
 
 		if item.Level+1 < c.maxLevel {
-			q := &types.URLQueueItem{
+			q := &common.URLQueueItem{
 				Origin: item.Origin,
 				Refer:  item.URL,
 				URL:    u,

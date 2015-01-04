@@ -2,9 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/jasdel/harvester/internal/common"
 	"github.com/jasdel/harvester/internal/storage"
-	"github.com/jasdel/harvester/internal/types"
-	"github.com/jasdel/harvester/internal/util"
 	"log"
 	"net/http"
 	"path"
@@ -59,10 +58,10 @@ func (h *JobResultHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // the filter acts as the prefix to a mime content type patter.
 //
 // e.g: mimeFilter := "image" // returns all image URLs
-func (h *JobResultHandler) jobResult(id types.JobId, mimeFilter string) (types.JobResults, *util.Error) {
+func (h *JobResultHandler) jobResult(id common.JobId, mimeFilter string) (common.JobResults, *ErroMsg) {
 	result, err := h.sc.JobClient().Result(id, mimeFilter)
 	if err != nil {
-		return nil, &util.Error{
+		return nil, &ErroMsg{
 			Source: "jobResult",
 			Info:   fmt.Sprintf("Failed to get job %d result", id),
 			Err:    err,

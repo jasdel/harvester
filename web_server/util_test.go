@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/jasdel/harvester/internal/types"
+	"github.com/jasdel/harvester/internal/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"net/http"
@@ -25,5 +25,5 @@ func TestJobIdFromString(t *testing.T) {
 
 	id, err = jobIdFromString("12345")
 	assert.Nil(t, err, "Valid job id")
-	assert.Equal(t, types.JobId(12345), id, "Correct job id decoded")
+	assert.Equal(t, common.JobId(12345), id, "Correct job id decoded")
 }

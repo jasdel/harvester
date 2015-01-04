@@ -1,10 +1,9 @@
 package main
 
 import (
+	"github.com/jasdel/harvester/internal/common"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
-	"github.com/jasdel/harvester/internal/types"
-	"github.com/jasdel/harvester/internal/util"
 	"log"
 )
 
@@ -40,7 +39,7 @@ func NewForeman(workQueuePub queue.Publisher, urlQueuePub queue.Publisher, sc *s
 // allowed to be sent to the worker queue. If the item was previously crawled it's descendants
 // will be added to the queue if the maxLevel hasn't been reached yet.  If it has, the
 // descendants will be just added to the job result list.
-func (f *Foreman) ProcessQueueItem(item *types.URLQueueItem) {
+func (f *Foreman) ProcessQueueItem(item *common.URLQueueItem) {
 	urlClient := f.sc.URLClient()
 	log.Printf("Foreman: Queue URL: %s, from: %s, origin: %s, level: %d", item.URL, item.Refer, item.Origin, item.Level)
 
@@ -53,7 +52,7 @@ func (f *Foreman) ProcessQueueItem(item *types.URLQueueItem) {
 	if url != nil {
 		// If the item URL has already been crawled or a mime type
 		// that can be skipped, use the cache instead.
-		if url.Crawled || util.CanSkipMime(url.Mime) {
+		if url.Crawled || common.CanSkipMime(url.Mime) {
 			f.processFromCache(item, url)
 			return
 		}
@@ -66,7 +65,7 @@ func (f *Foreman) ProcessQueueItem(item *types.URLQueueItem) {
 
 // If an item is being processed from the cache this will determine if that item's descendants
 // should be added the job results, or queued to be crawled them selves.
-func (f *Foreman) processFromCache(item *types.URLQueueItem, url *storage.URL) {
+func (f *Foreman) processFromCache(item *common.URLQueueItem, url *storage.URL) {
 	log.Println("URL already known and crawled, skipping, checking descendants", item.URL, item.Refer)
 	urlClient := f.sc.URLClient()
 
@@ -100,7 +99,7 @@ func (f *Foreman) processFromCache(item *types.URLQueueItem, url *storage.URL) {
 }
 
 // Adds the item to all Jobs associated with the item's origin results
-func (f *Foreman) addToResults(item *types.URLQueueItem, knownURL *storage.URL) error {
+func (f *Foreman) addToResults(item *common.URLQueueItem, knownURL *storage.URL) error {
 	urlClient := f.sc.URLClient()
 
 	jobIdsForOrigin, err := urlClient.GetJobIdsForURL(item.Origin)
@@ -118,7 +117,7 @@ func (f *Foreman) addToResults(item *types.URLQueueItem, knownURL *storage.URL) 
 // Processes descendants of a URL which is both known and already crawled.
 // The descendants will be either added to the urlQueue if the maxLevel hasn't
 // been reached yet, or will be just added as results to
-func (f *Foreman) processDescendants(item *types.URLQueueItem) error {
+func (f *Foreman) processDescendants(item *common.URLQueueItem) error {
 	urlClient := f.sc.URLClient()
 
 	// Get all URLs where this item is a refer to, so that they can be queued
@@ -156,17 +155,17 @@ func (f *Foreman) processDescendants(item *types.URLQueueItem) error {
 
 // Enqueue a list of URLs with a single refer.  The URLs are added to both the
 // pending Job, and urlQueue.
-func (f *Foreman) enqueueURLs(refer *types.URLQueueItem, urls []*storage.URL) error {
+func (f *Foreman) enqueueURLs(refer *common.URLQueueItem, urls []*storage.URL) error {
 	urlClient := f.sc.URLClient()
 
 	for _, u := range urls {
-		// if util.CanSkipMime(u.Mime) {
+		// if common.CanSkipMime(u.Mime) {
 		// 	// If the URL is a type that can be skipped and doesn't need to be
 		// 	// crawled,
 		// 	continue
 		// }
 
-		q := &types.URLQueueItem{
+		q := &common.URLQueueItem{
 			Origin: refer.Origin,
 			Refer:  refer.URL,
 			URL:    u.URL,

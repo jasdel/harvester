@@ -3,7 +3,7 @@ package storage
 import (
 	"database/sql"
 	"fmt"
-	"github.com/jasdel/harvester/internal/types"
+	"github.com/jasdel/harvester/internal/common"
 	"github.com/lib/pq"
 	"time"
 )
@@ -94,7 +94,7 @@ func (u *URLClient) DeletePending(url, origin string) error {
 }
 
 // Records a new crawled URL into the job results, for a specific jobId
-func (u *URLClient) AddResult(jobId types.JobId, url, refer, mime string) error {
+func (u *URLClient) AddResult(jobId common.JobId, url, refer, mime string) error {
 	const queryURLInsertResult = `INSERT INTO job_result (url, job_id, refer, mime) VALUES ($1, $2, $3, $4)`
 
 	if _, err := u.client.db.Exec(queryURLInsertResult, url, jobId, refer, mime); err != nil {
@@ -104,7 +104,7 @@ func (u *URLClient) AddResult(jobId types.JobId, url, refer, mime string) error 
 }
 
 // Adds a batch of URLs to the job results. Will update the job result for each job Id provided
-func (u *URLClient) AddURLsToResults(jobIds []types.JobId, refer string, urls []*URL) error {
+func (u *URLClient) AddURLsToResults(jobIds []common.JobId, refer string, urls []*URL) error {
 	for _, jobId := range jobIds {
 		for _, url := range urls {
 			if err := u.AddResult(jobId, url.URL, refer, url.Mime); err != nil {
@@ -140,7 +140,7 @@ func (u *URLClient) MarkJobURLComplete(url string) error {
 }
 
 // Searches for all JobIds associated with this origin URL.
-func (u *URLClient) GetJobIdsForURL(url string) ([]types.JobId, error) {
+func (u *URLClient) GetJobIdsForURL(url string) ([]common.JobId, error) {
 	const queryURLJobURLOrigin = `SELECT job_id FROM job_url WHERE url = $1 AND completed_on IS NULL`
 	rows, err := u.client.db.Query(queryURLJobURLOrigin, url)
 	if err != nil {
@@ -148,7 +148,7 @@ func (u *URLClient) GetJobIdsForURL(url string) ([]types.JobId, error) {
 	}
 	defer rows.Close()
 
-	jobIds := []types.JobId{}
+	jobIds := []common.JobId{}
 	for rows.Next() {
 		var id sql.NullInt64
 		if err := rows.Scan(&id); err != nil {
@@ -157,7 +157,7 @@ func (u *URLClient) GetJobIdsForURL(url string) ([]types.JobId, error) {
 		if !id.Valid {
 			return nil, fmt.Errorf("No job id for url", url)
 		}
-		jobIds = append(jobIds, types.JobId(id.Int64))
+		jobIds = append(jobIds, common.JobId(id.Int64))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

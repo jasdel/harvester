@@ -3,9 +3,9 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"github.com/jasdel/harvester/internal/common"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
-	"github.com/jasdel/harvester/internal/types"
 	"log"
 	"os"
 )
@@ -61,16 +61,18 @@ func main() {
 	}
 }
 
+// Provides the Foreman's configuration information. For connecting to
+// Queues, storage, and other runtime settings.
 type Config struct {
 	// Storage connection configuration
 	StorageConfig storage.ClientConfig `json:"storage"`
 
 	// Queue for receiving queue request from the web server, worker,
 	// and from foreman if the refer URL had already been crawled.
-	URLQueue types.QueueConfig `json:"urlQueue"`
+	URLQueue common.QueueConfig `json:"urlQueue"`
 
-	// Queue for sending URI items from  the foremans to workers
-	WorkQueue types.QueueConfig `json:"workQueue"`
+	// Queue for sending URI items from  the foreman's to workers
+	WorkQueue common.QueueConfig `json:"workQueue"`
 
 	// the maximum level the crawling should be allowed to travel
 	MaxLevel int `json:"maxLevel"`

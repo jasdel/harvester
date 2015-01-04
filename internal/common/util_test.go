@@ -1,4 +1,4 @@
-package main
+package common
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -6,15 +6,15 @@ import (
 )
 
 func TestLooksLikeImageURL(t *testing.T) {
-	kind := guessURLsMime("https://www.google.com/something.jpg")
+	kind := GuessURLsMime("https://www.google.com/something.jpg")
 	assert.Equal(t, "image/jpeg", kind, "Expect kind to match jpg image.")
 
-	kind = guessURLsMime("http://ecx.images-amazon.com/images/I/41YNP8xxwsL._AC_SX75_.jpg")
+	kind = GuessURLsMime("http://ecx.images-amazon.com/images/I/41YNP8xxwsL._AC_SX75_.jpg")
 	assert.Equal(t, "image/jpeg", kind, "Expect kind to match jpg image.")
 
-	kind = guessURLsMime("http://ecx.images-amazon.com/images/I/41YNP8xxwsL._AC_SX75_.css")
+	kind = GuessURLsMime("http://ecx.images-amazon.com/images/I/41YNP8xxwsL._AC_SX75_.css")
 	assert.Equal(t, "text/css", kind, "Expect kind to match jpg image.")
 
-	kind = guessURLsMime("http://ecx.images-amazon.com/images/I/41YNP8xxwsL._AC_SX75_.js")
+	kind = GuessURLsMime("http://ecx.images-amazon.com/images/I/41YNP8xxwsL._AC_SX75_.js")
 	assert.Equal(t, "text/javascript", kind, "Expect kind to match jpg image.")
 }

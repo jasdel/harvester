@@ -3,7 +3,7 @@ package storage
 import (
 	"database/sql"
 	"fmt"
-	"github.com/jasdel/harvester/internal/types"
+	"github.com/jasdel/harvester/internal/common"
 	"github.com/lib/pq"
 )
 
@@ -34,7 +34,7 @@ func getJobFromRow(row *sql.Row) (*Job, error) {
 	}
 
 	return &Job{
-		Id:        types.JobId(id.Int64),
+		Id:        common.JobId(id.Int64),
 		CreatedOn: createdOn.Time,
 	}, nil
 }
@@ -56,7 +56,7 @@ func getJobURLFromRows(rows *sql.Rows) (jobURL JobURL, err error) {
 	}
 
 	jobURL = JobURL{
-		JobId:       types.JobId(jobId.Int64),
+		JobId:       common.JobId(jobId.Int64),
 		URL:         url.String,
 		CompletedOn: completedOn.Time,
 	}
@@ -93,7 +93,7 @@ func (j *JobClient) CreateJob(urls []string) (*Job, error) {
 
 // Searches for a job, and returns it and its URLs if the job exist. Nil is return if
 // the job does not exist
-func (j *JobClient) GetJob(id types.JobId) (*Job, error) {
+func (j *JobClient) GetJob(id common.JobId) (*Job, error) {
 	const queryJob = `SELECT id,created_on FROM job WHERE id = $1`
 
 	job, err := getJobFromRow(j.client.db.QueryRow(queryJob, id))
@@ -124,7 +124,7 @@ func (j *JobClient) GetJob(id types.JobId) (*Job, error) {
 }
 
 // Queries the results images for each image URL
-func (j *JobClient) Result(id types.JobId, mimeFilter string) (types.JobResults, error) {
+func (j *JobClient) Result(id common.JobId, mimeFilter string) (common.JobResults, error) {
 	const queryJobResult = `SELECT refer,url,mime FROM job_result WHERE job_id = $1 AND mime like $2`
 
 	rows, err := j.client.db.Query(queryJobResult, id, mimeFilter+"%")
@@ -133,7 +133,7 @@ func (j *JobClient) Result(id types.JobId, mimeFilter string) (types.JobResults,
 	}
 	defer rows.Close()
 
-	result := make(types.JobResults)
+	result := make(common.JobResults)
 	knownResults := make(map[string]map[string]struct{})
 	for rows.Next() {
 		var refer sql.NullString
@@ -153,6 +153,7 @@ func (j *JobClient) Result(id types.JobId, mimeFilter string) (types.JobResults,
 			knownResults[refer.String] = make(map[string]struct{})
 		} else {
 			if _, ok := knownResults[refer.String][u.String]; ok {
+				// Prevent duplicate entries
 				continue
 			}
 		}

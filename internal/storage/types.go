@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"github.com/jasdel/harvester/internal/types"
+	"github.com/jasdel/harvester/internal/common"
 	"time"
 )
 
@@ -15,15 +15,15 @@ type URL struct {
 }
 
 type Job struct {
-	Id        types.JobId
+	Id        common.JobId
 	URLs      []JobURL
 	CreatedOn time.Time
 }
 
 // Returns the status of the job.  The status includes the progress
 // of completed vs pending, and total elapsed time.
-func (j *Job) Status() *types.JobStatus {
-	status := &types.JobStatus{Id: j.Id}
+func (j *Job) Status() *common.JobStatus {
+	status := &common.JobStatus{Id: j.Id}
 	status.URLs = make(map[string]bool)
 	var compTime time.Time
 	for _, u := range j.URLs {
@@ -50,5 +50,5 @@ type JobURL struct {
 	URL         string
 	Completed   bool
 	CompletedOn time.Time
-	JobId       types.JobId
+	JobId       common.JobId
 }

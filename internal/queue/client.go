@@ -2,13 +2,28 @@ package queue
 
 import (
 	"github.com/apcera/nats"
-	"github.com/jasdel/harvester/internal/types"
+	"github.com/jasdel/harvester/internal/common"
 )
 
+// Client for communicating with th eNATS message queue. The publishers
+// will publish to the queue asynchronously.  The receiver will block
+// until a message has been received on the queue.  Receiver endpoints
+// are also configured as Queue Receivers.  Therefore if there are
+// multiple receivers on the same topic only a single one will receive
+// the message. Messages will be received in the order they were sent.
 type client struct {
-	ec     *nats.EncodedConn
-	sendCh chan *types.URLQueueItem
-	recvCh chan *types.URLQueueItem
+	// Client for communicating with the NATS message queue. Transmission
+	// with the message queue will be pre-(d)encoded. So extra processing
+	// is not needed
+	ec *nats.EncodedConn
+
+	// Sending channel to publish to a queue. Only initialized by
+	// newClient if the sender flag is set.
+	sendCh chan *common.URLQueueItem
+
+	// Receiving channel to receive from a queue. Only initialized
+	// by newClient if the receiver flag is set.
+	recvCh chan *common.URLQueueItem
 }
 
 // Interface for publishing to an URLQueueItem topic
@@ -19,7 +34,7 @@ type Publisher interface {
 	Close()
 
 	// Sends one or multiple URL items to associated topic's receivers
-	Send(item ...*types.URLQueueItem)
+	Send(item ...*common.URLQueueItem)
 }
 
 // Interface for receiving from an URLQueueITem topic
@@ -30,7 +45,7 @@ type Receiver interface {
 	Close()
 
 	// Receive channel to receive items from the associated topic
-	Receive() <-chan *types.URLQueueItem
+	Receive() <-chan *common.URLQueueItem
 }
 
 // Creates a new Queue Publisher which is only able to send
@@ -61,12 +76,12 @@ func newClient(connURL, topic string, sender, receiver bool) (*client, error) {
 	}
 
 	if sender {
-		c.sendCh = make(chan *types.URLQueueItem)
+		c.sendCh = make(chan *common.URLQueueItem)
 		c.ec.BindSendChan(topic, c.sendCh)
 	}
 
 	if receiver {
-		c.recvCh = make(chan *types.URLQueueItem)
+		c.recvCh = make(chan *common.URLQueueItem)
 		c.ec.BindRecvQueueChan(topic, topic, c.recvCh)
 	}
 
@@ -79,14 +94,16 @@ func (c *client) Close() {
 	c.ec.Close()
 }
 
-// Adds a new URLQueueItem to the queue
-func (c *client) Send(items ...*types.URLQueueItem) {
+// Adds a new URLQueueItem to the queue.  A Single or multiple
+// items can be added at once, and they will be sent to the queue
+// in order.
+func (c *client) Send(items ...*common.URLQueueItem) {
 	for i := 0; i < len(items); i++ {
 		c.sendCh <- items[i]
 	}
 }
 
 // Returns a read only channel to send URLQueueItem to
-func (c *client) Receive() <-chan *types.URLQueueItem {
+func (c *client) Receive() <-chan *common.URLQueueItem {
 	return c.recvCh
 }
