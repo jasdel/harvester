@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/jasdel/harvester/internal/common"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
 	"log"
@@ -23,7 +22,7 @@ func main() {
 
 	// Initialize the queue receiver of the filter URLs from the foreman.
 	// URLs received from this queue will be crawled
-	workQueueRecv, err := queue.NewReceiver(cfg.WorkQueue.ConnURL, cfg.WorkQueue.Topic)
+	workQueueRecv, err := queue.NewReceiver(cfg.WorkQueueConfig)
 	if err != nil {
 		log.Fatalln("Worker Queue Receiver: initialization failed:", err)
 	}
@@ -31,7 +30,7 @@ func main() {
 
 	// Initialize the queue publisher for publishing descendants of
 	// a previously queued URL to be queued for crawling
-	urlQueuePub, err := queue.NewPublisher(cfg.URLQueue.ConnURL, cfg.URLQueue.Topic)
+	urlQueuePub, err := queue.NewPublisher(cfg.URLQueueConfig)
 	if err != nil {
 		log.Fatalln("Worker Queue Publisher: initialization failed:", err)
 	}
@@ -57,12 +56,12 @@ func main() {
 
 // TODO document these fields
 type Config struct {
-	StorageConfig storage.ClientConfig `json:"storage"`
-	WorkQueue     common.QueueConfig   `json:"workQueue"`
-	URLQueue      common.QueueConfig   `json:"urlQueue"`
-	MaxLevel      int                  `json:"maxLevel"`
-	WorkDelayStr  string               `json:"workDelay"`
-	WorkDelay     time.Duration        `json:"-"`
+	StorageConfig   storage.ClientConfig `json:"storage"`
+	WorkQueueConfig queue.QueueConfig    `json:"workQueue"`
+	URLQueueConfig  queue.QueueConfig    `json:"urlQueue"`
+	MaxLevel        int                  `json:"maxLevel"`
+	WorkDelayStr    string               `json:"workDelay"`
+	WorkDelay       time.Duration        `json:"-"`
 }
 
 // Loads the configuration file from disk in as a JSON blob.

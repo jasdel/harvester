@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"github.com/jasdel/harvester/internal/common"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
 	"log"
@@ -33,7 +32,7 @@ func main() {
 	}
 
 	// Initialize the queue for publishing scheduled Job URLs
-	urlQueuePub, err := queue.NewPublisher(cfg.URLQueue.ConnURL, cfg.URLQueue.Topic)
+	urlQueuePub, err := queue.NewPublisher(cfg.URLQueueConfig)
 	if err != nil {
 		log.Fatalln("Queue Publisher initialization failed:", err)
 	}
@@ -58,9 +57,9 @@ func main() {
 }
 
 type Config struct {
-	StorageConfig storage.ClientConfig `json:"storage"`
-	URLQueue      common.QueueConfig   `json:"urlQueue"`
-	HTTPAddr      string               `json:"httpAddr"`
+	StorageConfig  storage.ClientConfig `json:"storage"`
+	URLQueueConfig queue.QueueConfig    `json:"urlQueue"`
+	HTTPAddr       string               `json:"httpAddr"`
 }
 
 // Loads the configuration file from disk in as a JSON blob.

@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"github.com/jasdel/harvester/internal/common"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
 	"log"
@@ -23,7 +22,7 @@ func main() {
 
 	// Initialize the queue receiver to receive URLs that are being
 	// queue to be crawled
-	urlQueueRecv, err := queue.NewReceiver(cfg.URLQueue.ConnURL, cfg.URLQueue.Topic)
+	urlQueueRecv, err := queue.NewReceiver(cfg.URLQueueConfig)
 	if err != nil {
 		log.Fatalln("Queue Receiver initialization failed:", err)
 	}
@@ -31,7 +30,7 @@ func main() {
 
 	// If queued items have already been crawled, will need to find descendants,
 	// and enqueue them.
-	urlQueuePub, err := queue.NewPublisher(cfg.URLQueue.ConnURL, cfg.URLQueue.Topic)
+	urlQueuePub, err := queue.NewPublisher(cfg.URLQueueConfig)
 	if err != nil {
 		log.Fatalln("Queue Publisher initialization failed:", err)
 	}
@@ -39,7 +38,7 @@ func main() {
 
 	// Initialize the queue publisher to publish the filtered URLs
 	// to the workers that will perform the crawling
-	workQueuePub, err := queue.NewPublisher(cfg.WorkQueue.ConnURL, cfg.WorkQueue.Topic)
+	workQueuePub, err := queue.NewPublisher(cfg.WorkQueueConfig)
 	if err != nil {
 		log.Fatalln("Worker Queue Publisher initialization failed", err)
 	}
@@ -69,10 +68,10 @@ type Config struct {
 
 	// Queue for receiving queue request from the web server, worker,
 	// and from foreman if the refer URL had already been crawled.
-	URLQueue common.QueueConfig `json:"urlQueue"`
+	URLQueueConfig queue.QueueConfig `json:"urlQueue"`
 
 	// Queue for sending URI items from  the foreman's to workers
-	WorkQueue common.QueueConfig `json:"workQueue"`
+	WorkQueueConfig queue.QueueConfig `json:"workQueue"`
 
 	// the maximum level the crawling should be allowed to travel
 	MaxLevel int `json:"maxLevel"`

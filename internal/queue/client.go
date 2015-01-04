@@ -5,6 +5,17 @@ import (
 	"github.com/jasdel/harvester/internal/common"
 )
 
+// Queue configuration states what topic the queue channel should be
+// attached to and the connection URL for the messaging service.
+type QueueConfig struct {
+	// Topic to connect to. In the case of a receiver queue client
+	// the topic will also be the queue channel.
+	Topic string `json:"topic"`
+
+	// Connection URL to the messaging service.
+	ConnURL string `json:"connURL"`
+}
+
 // Client for communicating with th eNATS message queue. The publishers
 // will publish to the queue asynchronously.  The receiver will block
 // until a message has been received on the queue.  Receiver endpoints
@@ -50,22 +61,22 @@ type Receiver interface {
 
 // Creates a new Queue Publisher which is only able to send
 // to to topic provided. The Close of a
-func NewPublisher(connURL, topic string) (Publisher, error) {
-	return newClient(connURL, topic, true, false)
+func NewPublisher(cfg QueueConfig) (Publisher, error) {
+	return newClient(cfg, true, false)
 }
 
 // Creates a new Queue Receiver which is only able to receive from
 // the topic provided.
-func NewReceiver(connURL, topic string) (Receiver, error) {
-	return newClient(connURL, topic, false, true)
+func NewReceiver(cfg QueueConfig) (Receiver, error) {
+	return newClient(cfg, false, true)
 }
 
 // Creates a new Queue Client. The client can be configured as a sender,
 // receiver, or both for the topic provided.
-func newClient(connURL, topic string, sender, receiver bool) (*client, error) {
+func newClient(cfg QueueConfig, sender, receiver bool) (*client, error) {
 	c := &client{}
 
-	nc, err := nats.Connect(connURL)
+	nc, err := nats.Connect(cfg.ConnURL)
 	if err != nil {
 		return nil, err
 	}
@@ -77,12 +88,12 @@ func newClient(connURL, topic string, sender, receiver bool) (*client, error) {
 
 	if sender {
 		c.sendCh = make(chan *common.URLQueueItem)
-		c.ec.BindSendChan(topic, c.sendCh)
+		c.ec.BindSendChan(cfg.Topic, c.sendCh)
 	}
 
 	if receiver {
 		c.recvCh = make(chan *common.URLQueueItem)
-		c.ec.BindRecvQueueChan(topic, topic, c.recvCh)
+		c.ec.BindRecvQueueChan(cfg.Topic, cfg.Topic, c.recvCh)
 	}
 
 	return c, nil
