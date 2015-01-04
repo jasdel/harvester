@@ -7,7 +7,10 @@ import (
 	"github.com/lib/pq"
 )
 
+// Provides a name spaced collection of Job based storage operations. JobClient
+// does not hold non go-routine state, and is safe to share across multiples.
 type JobClient struct {
+	// Storage client already configured and connected to the storage provider
 	client *Client
 }
 
@@ -131,7 +134,7 @@ func (j *JobClient) Result(id types.JobId, mimeFilter string) (types.JobResults,
 	defer rows.Close()
 
 	result := make(types.JobResults)
-
+	knownResults := make(map[string]map[string]struct{})
 	for rows.Next() {
 		var refer sql.NullString
 		var u sql.NullString
@@ -146,9 +149,16 @@ func (j *JobClient) Result(id types.JobId, mimeFilter string) (types.JobResults,
 		}
 
 		if _, ok := result[refer.String]; !ok {
-			result[refer.String] = []types.JobResult{}
+			result[refer.String] = []string{}
+			knownResults[refer.String] = make(map[string]struct{})
+		} else {
+			if _, ok := knownResults[refer.String][u.String]; ok {
+				continue
+			}
 		}
-		result[refer.String] = append(result[refer.String], types.JobResult{Mime: mime.String, URL: u.String})
+		knownResults[refer.String][u.String] = struct{}{}
+
+		result[refer.String] = append(result[refer.String], u.String)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

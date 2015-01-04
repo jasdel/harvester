@@ -13,13 +13,10 @@ type JobStatus struct {
 	Completed int
 	Pending   int
 	Elapsed   time.Duration
+	URLs      map[string]bool
 }
 
-type JobResult struct {
-	Mime string `json:"mime"`
-	URL  string `json:"url"`
-}
-type JobResults map[string][]JobResult
+type JobResults map[string][]string
 
 type URLQueueItem struct {
 	Origin string `json:"origin"`

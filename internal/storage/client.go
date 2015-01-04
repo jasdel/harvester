@@ -6,7 +6,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// Configuration for the database storage.
+// Configuration for the storage connection info
 type ClientConfig struct {
 	User    string `json:"user"`
 	Pass    string `json:"pass"`

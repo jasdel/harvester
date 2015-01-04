@@ -11,17 +11,30 @@ type client struct {
 	recvCh chan *types.URLQueueItem
 }
 
+// Interface for publishing to an URLQueueItem topic
 type Publisher interface {
+	// Closes the Publish channel. No more calls to Send should be made
+	// once Close is called. The Publisher's close should be called
+	// when finished with the topic or it will leak.
 	Close()
+
+	// Sends one or multiple URL items to associated topic's receivers
 	Send(item ...*types.URLQueueItem)
 }
+
+// Interface for receiving from an URLQueueITem topic
 type Receiver interface {
+	// Closes the Receiver channel. No more calls to Send should be made
+	// once Close is called. The Receiver's close should be called
+	// when finished with the topic or it will leak.
 	Close()
+
+	// Receive channel to receive items from the associated topic
 	Receive() <-chan *types.URLQueueItem
 }
 
 // Creates a new Queue Publisher which is only able to send
-// to to topic provided.
+// to to topic provided. The Close of a
 func NewPublisher(connURL, topic string) (Publisher, error) {
 	return newClient(connURL, topic, true, false)
 }

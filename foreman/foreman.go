@@ -8,13 +8,25 @@ import (
 	"log"
 )
 
+// Provides filtering of the items before they are forwarded on to the worker queue.
 type Foreman struct {
+	// Queue to publish URL items to in order to be crawled.
 	workQueuePub queue.Publisher
-	urlQueuePub  queue.Publisher
-	sc           *storage.Client
-	maxLevel     int
+
+	// Queue to publish URL items to who's refer URL had already been crawled.
+	urlQueuePub queue.Publisher
+
+	// Storage client, for accessing, and manipulating the storage
+	// For JobClients and URLClients
+	sc *storage.Client
+
+	// Maximum level already crawled items are allowed to have their descendants
+	// queued.
+	maxLevel int
 }
 
+// Creates a new instance of the foreman and returns it.  The foreman's methods
+// are safe to be called across multiple go routines.
 func NewForeman(workQueuePub queue.Publisher, urlQueuePub queue.Publisher, sc *storage.Client, maxLevel int) *Foreman {
 	return &Foreman{
 		workQueuePub: workQueuePub,
@@ -24,6 +36,10 @@ func NewForeman(workQueuePub queue.Publisher, urlQueuePub queue.Publisher, sc *s
 	}
 }
 
+// Determines if a queued item should be filtered out because its already been crawled, or
+// allowed to be sent to the worker queue. If the item was previously crawled it's descendants
+// will be added to the queue if the maxLevel hasn't been reached yet.  If it has, the
+// descendants will be just added to the job result list.
 func (f *Foreman) ProcessQueueItem(item *types.URLQueueItem) {
 	urlClient := f.sc.URLClient()
 	log.Printf("Foreman: Queue URL: %s, from: %s, origin: %s, level: %d", item.URL, item.Refer, item.Origin, item.Level)
@@ -35,8 +51,10 @@ func (f *Foreman) ProcessQueueItem(item *types.URLQueueItem) {
 	}
 
 	if url != nil {
-		if url.Crawled {
-			f.processAlreadyCrawled(item, url)
+		// If the item URL has already been crawled or a mime type
+		// that can be skipped, use the cache instead.
+		if url.Crawled || util.CanSkipMime(url.Mime) {
+			f.processFromCache(item, url)
 			return
 		}
 	} else {
@@ -46,9 +64,9 @@ func (f *Foreman) ProcessQueueItem(item *types.URLQueueItem) {
 	f.workQueuePub.Send(item)
 }
 
-// If an item has already been crawled this will determine if that item's descendants
+// If an item is being processed from the cache this will determine if that item's descendants
 // should be added the job results, or queued to be crawled them selves.
-func (f *Foreman) processAlreadyCrawled(item *types.URLQueueItem, url *storage.URL) {
+func (f *Foreman) processFromCache(item *types.URLQueueItem, url *storage.URL) {
 	log.Println("URL already known and crawled, skipping, checking descendants", item.URL, item.Refer)
 	urlClient := f.sc.URLClient()
 
@@ -142,11 +160,11 @@ func (f *Foreman) enqueueURLs(refer *types.URLQueueItem, urls []*storage.URL) er
 	urlClient := f.sc.URLClient()
 
 	for _, u := range urls {
-		if util.CanSkipMime(u.Mime) {
-			// If the URL is a type that can be skipped and doesn't need to be
-			// crawled,
-			continue
-		}
+		// if util.CanSkipMime(u.Mime) {
+		// 	// If the URL is a type that can be skipped and doesn't need to be
+		// 	// crawled,
+		// 	continue
+		// }
 
 		q := &types.URLQueueItem{
 			Origin: refer.Origin,

@@ -62,10 +62,18 @@ func main() {
 }
 
 type Config struct {
+	// Storage connection configuration
 	StorageConfig storage.ClientConfig `json:"storage"`
-	URLQueue      types.QueueConfig    `json:"urlQueue"`
-	WorkQueue     types.QueueConfig    `json:"workQueue"`
-	MaxLevel      int                  `json:"maxLevel"`
+
+	// Queue for receiving queue request from the web server, worker,
+	// and from foreman if the refer URL had already been crawled.
+	URLQueue types.QueueConfig `json:"urlQueue"`
+
+	// Queue for sending URI items from  the foremans to workers
+	WorkQueue types.QueueConfig `json:"workQueue"`
+
+	// the maximum level the crawling should be allowed to travel
+	MaxLevel int `json:"maxLevel"`
 }
 
 // Loads the configuration file from disk in as a JSON blob.

@@ -8,7 +8,10 @@ import (
 	"time"
 )
 
+// Provides a name spaced collection of URL based storage operations. JURLClient
+// does not hold non go-routine state, and is safe to share across multiples.
 type URLClient struct {
+	// Storage client already configured and connected to the storage provider
 	client *Client
 }
 
@@ -78,7 +81,9 @@ func (u *URLClient) AddPending(url, origin string) error {
 	return nil
 }
 
-// Deletes an existing pending record for a URL that no longer will be crawled
+// Deletes a pending record for a URL that no longer needs be crawled. The pending
+// record is a combination of url + origin, where origin is the origin URL the Job was
+// created with.
 func (u *URLClient) DeletePending(url, origin string) error {
 	const queryURLDeletePending = `DELETE FROM url_pending WHERE url = $1 AND origin = $2`
 
@@ -88,7 +93,7 @@ func (u *URLClient) DeletePending(url, origin string) error {
 	return nil
 }
 
-// Records a new crawled URL result for a job
+// Records a new crawled URL into the job results, for a specific jobId
 func (u *URLClient) AddResult(jobId types.JobId, url, refer, mime string) error {
 	const queryURLInsertResult = `INSERT INTO job_result (url, job_id, refer, mime) VALUES ($1, $2, $3, $4)`
 
@@ -98,7 +103,7 @@ func (u *URLClient) AddResult(jobId types.JobId, url, refer, mime string) error 
 	return nil
 }
 
-// Adds a batch of URLs to the result
+// Adds a batch of URLs to the job results. Will update the job result for each job Id provided
 func (u *URLClient) AddURLsToResults(jobIds []types.JobId, refer string, urls []*URL) error {
 	for _, jobId := range jobIds {
 		for _, url := range urls {

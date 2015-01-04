@@ -11,9 +11,10 @@ import (
 )
 
 type jobStatusMsg struct {
-	Completed int    `json:"completed"`
-	Pending   int    `json:"pending"`
-	Elapsed   string `json:"elapsed"`
+	Completed int             `json:"completed"`
+	Pending   int             `json:"pending"`
+	Elapsed   string          `json:"elapsed"`
+	URLs      map[string]bool `json:"urls"`
 }
 
 // Handles the request checking on the status of a previously scheduled job.
@@ -56,6 +57,7 @@ func (h *JobStatusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Completed: status.Completed,
 		Pending:   status.Pending,
 		Elapsed:   status.Elapsed.String(),
+		URLs:      status.URLs,
 	}, http.StatusOK)
 }
 

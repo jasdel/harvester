@@ -24,6 +24,7 @@ type Job struct {
 // of completed vs pending, and total elapsed time.
 func (j *Job) Status() *types.JobStatus {
 	status := &types.JobStatus{Id: j.Id}
+	status.URLs = make(map[string]bool)
 	var compTime time.Time
 	for _, u := range j.URLs {
 		if u.Completed {
@@ -34,6 +35,7 @@ func (j *Job) Status() *types.JobStatus {
 		} else {
 			status.Pending++
 		}
+		status.URLs[u.URL] = u.Completed
 	}
 
 	if status.Pending != 0 {
@@ -49,9 +51,4 @@ type JobURL struct {
 	Completed   bool
 	CompletedOn time.Time
 	JobId       types.JobId
-}
-
-type PendingURLCrawl struct {
-	Origin string
-	URL    string
 }
