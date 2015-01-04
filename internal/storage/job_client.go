@@ -16,6 +16,8 @@ type JobClient struct {
 
 // Extracts a job from a QueryRow.  Nil for the job will be returned
 // if the job does not exist.
+// Expects the query columns to be in the order of:
+// 		job_id, created_on
 func getJobFromRow(row *sql.Row) (*Job, error) {
 	var (
 		id        sql.NullInt64
@@ -40,6 +42,8 @@ func getJobFromRow(row *sql.Row) (*Job, error) {
 }
 
 // Extracts the Job URLs from a Query of rows.
+// Expects the query columns to be in the order of:
+// 		job_id, url, completed_on
 func getJobURLFromRows(rows *sql.Rows) (jobURL JobURL, err error) {
 	var (
 		jobId       sql.NullInt64
@@ -67,7 +71,8 @@ func getJobURLFromRows(rows *sql.Rows) (jobURL JobURL, err error) {
 	return jobURL, nil
 }
 
-// Create a new job entry with its URLS, returning the job object.
+// Create a new job entry with its URLS, returning a pointer to the newly
+// created Job.
 func (j *JobClient) CreateJob(urls []string) (*Job, error) {
 	const queryInsertJob = `INSERT INTO job DEFAULT VALUES RETURNING id,created_on`
 	const queryInsertJobURLs = `INSERT INTO job_url (job_id, url) VALUES ($1, $2)`
@@ -123,7 +128,10 @@ func (j *JobClient) GetJob(id common.JobId) (*Job, error) {
 	return job, err
 }
 
-// Queries the results images for each image URL
+// Queries the result URLs for a job by id, and generates the JobResult object.
+// Results will be grouped in list under the refer URL which those result URLs
+// were found from.  Duplicate results under the same refer URL will be removed,
+// and not included in the JobResults returned.
 func (j *JobClient) Result(id common.JobId, mimeFilter string) (common.JobResults, error) {
 	const queryJobResult = `SELECT refer,url,mime FROM job_result WHERE job_id = $1 AND mime like $2`
 

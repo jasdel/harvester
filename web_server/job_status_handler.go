@@ -9,6 +9,7 @@ import (
 	"path"
 )
 
+// Response to a successful request of a Job
 type jobStatusMsg struct {
 	// The Number of completely crawled Job URLs
 	Completed int `json:"completed"`

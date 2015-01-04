@@ -50,6 +50,7 @@ func main() {
 	if err != nil {
 		log.Fatalln("Storage NewClient failed:", err)
 	}
+	defer sc.Close()
 
 	foreman := NewForeman(workQueuePub, urlQueuePub, sc, cfg.MaxLevel)
 

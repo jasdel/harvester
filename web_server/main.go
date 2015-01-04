@@ -43,6 +43,7 @@ func main() {
 	if err != nil {
 		log.Fatalln("Storage NewClient failed:", err)
 	}
+	defer sc.Close()
 
 	// Create the HTTP handlers to be able to provide an interface for serving
 	// job schedule, status, and result requests.

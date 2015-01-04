@@ -42,6 +42,7 @@ func main() {
 	if err != nil {
 		log.Fatalln("Worker Storage Client: initialization failed:", err)
 	}
+	defer sc.Close()
 
 	crawler := NewCrawler(urlQueuePub, sc, cfg.MaxLevel)
 

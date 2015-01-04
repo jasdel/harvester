@@ -5,17 +5,6 @@ import (
 	"github.com/jasdel/harvester/internal/common"
 )
 
-// Queue configuration states what topic the queue channel should be
-// attached to and the connection URL for the messaging service.
-type QueueConfig struct {
-	// Topic to connect to. In the case of a receiver queue client
-	// the topic will also be the queue channel.
-	Topic string `json:"topic"`
-
-	// Connection URL to the messaging service.
-	ConnURL string `json:"connURL"`
-}
-
 // Client for communicating with th eNATS message queue. The publishers
 // will publish to the queue asynchronously.  The receiver will block
 // until a message has been received on the queue.  Receiver endpoints
@@ -117,4 +106,15 @@ func (c *client) Send(items ...*common.URLQueueItem) {
 // Returns a read only channel to send URLQueueItem to
 func (c *client) Receive() <-chan *common.URLQueueItem {
 	return c.recvCh
+}
+
+// Queue configuration states what topic the queue channel should be
+// attached to and the connection URL for the messaging service.
+type QueueConfig struct {
+	// Topic to connect to. In the case of a receiver queue client
+	// the topic will also be the queue channel.
+	Topic string `json:"topic"`
+
+	// Connection URL to the messaging service.
+	ConnURL string `json:"connURL"`
 }

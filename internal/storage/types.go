@@ -5,18 +5,41 @@ import (
 	"time"
 )
 
+// Definition of a 'url' table record.  A URL is defined as a URL + Refer URL
+// that the URL was found on.
 type URL struct {
-	Id        int64
-	URL       string
-	Refer     string
-	Mime      string
-	Crawled   bool
+	// ID (primary key) of this entry
+	Id int64
+
+	// This URL the record is for
+	URL string
+
+	// The URL which this URL record was found on
+	Refer string
+
+	// The Content type of the URL, e.g: text/html
+	Mime string
+
+	// If the URL has been crawled the Crawled flag
+	// will be true, This includes if it was crawled
+	// but found no descendants.
+	Crawled bool
+
+	// The time stamp the URL entry was created.
 	CreatedOn time.Time
 }
 
+// Job Entry for the 'job' record. The Job also includes the
+// URLs that were specified as tasks of a Job.
 type Job struct {
-	Id        common.JobId
-	URLs      []JobURL
+	// ID (primary key) of the job
+	Id common.JobId
+
+	// List of URLs belonging to this job. Includes their
+	// competition status.
+	URLs []JobURL
+
+	// The time stamp the Job was created on.
 	CreatedOn time.Time
 }
 
@@ -46,9 +69,19 @@ func (j *Job) Status() *common.JobStatus {
 	return status
 }
 
+// Job URL entry for the _'job_url' table. The CompletedOn value will only
+// be valid if the 'Completed' flag is true.
 type JobURL struct {
-	URL         string
-	Completed   bool
+	// Job URL that was requested
+	URL string
+
+	// If this Job URL has been completely crawled
+	Completed bool
+
+	// The time stamp the URL was finished crawling. Only valid if 'Completed'
+	// is also set.
 	CompletedOn time.Time
-	JobId       common.JobId
+
+	// The JobId this URL belongs to.
+	JobId common.JobId
 }

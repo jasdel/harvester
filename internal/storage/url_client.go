@@ -17,7 +17,7 @@ type URLClient struct {
 
 const DefaultURLMime = ``
 
-// Returns a URL record if it exists for the URL+refer pair
+// Returns a URL record if it exists for the URL + refer pair
 func (u *URLClient) GetURLWithRefer(url, refer string) (*URL, error) {
 	const queryURLWithRefer = `SELECT id,url,refer,mime,crawled,created_on FROM url WHERE url = $1 AND refer = $2`
 
@@ -181,6 +181,8 @@ func (u *URLClient) UpdateJobURLIfComplete(url string) (bool, error) {
 }
 
 // Extracts the URL from a QueryRow row.
+// Expects the query columns to be the following order:
+//		id, url, refer, mime, crawled, created_on
 func getURLFromRow(row *sql.Row) (*URL, error) {
 	var (
 		id        sql.NullInt64
@@ -213,6 +215,8 @@ func getURLFromRow(row *sql.Row) (*URL, error) {
 }
 
 // Extracts the URL fields from a Query rows.
+// Expects the query columns to be the following order:
+//		id, url, refer, mime, crawled, created_on
 func getURLFromRows(rows *sql.Rows) (*URL, error) {
 	var (
 		id        sql.NullInt64

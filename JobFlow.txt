@@ -50,3 +50,16 @@ TODO:
 |-> Upload to github
 |-> publish dock on a online doc page
 |-> Setup server running on jasdel w/ 2 instances of each layer.
+
+Documentation:
+|-> DB relation ship graph
+|-> Flow diagram
+|-> Describe Architecture
+	|-> web_service
+	|-> foreman
+	|-> worker
+|-> Design decisions
+	|-> Why dependencies
+	|-> Why structure
+|-> Shortcomings
+|-> Possible improvements.

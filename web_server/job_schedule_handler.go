@@ -13,7 +13,9 @@ import (
 	"strings"
 )
 
+// Response message to a successful job being scheduled
 type jobScheduledMsg struct {
+	// Id of the scheduled job
 	JobId common.JobId `json:"jobId"`
 }
 

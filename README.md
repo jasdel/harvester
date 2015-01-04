@@ -32,7 +32,7 @@ Parts:
 # Dependencies #
 ----------------
 - testify: Simple assert/require test syntax sugar
-- goji: web server router with url path params, and graceful shutdown
+- postgresql w/ go bindings: persistent storage.
 - gnatsd w/ go bindings: message queue between webserver => queue server <=> worker
 
 
@@ -48,24 +48,39 @@ Parts:
 
 # Usage #
 ---------
-curl -X POST --data-binary @- "http://localhost:8080" << EOF
-https://www.google.com
-http://example.com
-EOF
+	# Schedule a job
+	$ curl -X POST --data-binary @- "http://localhost:8080" << EOF
+	https://www.google.com
+	http://example.com
+	EOF
+	> {jobId:1}
+
+	# Retrieve the status of a job
+	$ curl -X GET "http://localhost:8080/status/1" 
+	> {completed: 0, pending: 2, urls: [{"https://www.google.com":false,"http://example.com":false}]}
+
+	# Retrieve the results of a job
+	$ curl -X GET "http://localhost:8080/result/1"
+	> { "<refer>": [<all url>, ...], ...} 
+
+	# Filter results for a specific mime type, e.g. image/*
+	$ curl -X GET "http://localhost:8080/result/1?mime=image"
+	> { "<refer>": [<image only url>, ...], ...} 
 
 # Setup #
 ---------
 gnatsd for message queues
 $ go get github.com/apcera/gnatsd
 $ go get github.com/apcera/nats
+$ gnatsd
 
-Create containers from docker file
+Create postgres container from docker file
 $ sudo docker build -t eg_postgresql ./setup
 
 Setup and start postgresql
 $ sudo docker run --rm -p 24001:5432 --name pg_test eg_postgresql
 $ psql -h localhost -p 24001 -d docker -U docker --password < setup/db.sql
-$ gnatsd -p 4442
+
 
 # Notes #
 ---------
