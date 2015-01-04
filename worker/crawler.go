@@ -4,62 +4,97 @@ import (
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
 	"github.com/jasdel/harvester/internal/types"
+	"github.com/jasdel/harvester/internal/util"
 	"log"
 	"net/http"
-	"net/url"
-	"path"
-	"strings"
 	"time"
 )
 
 type Crawler struct {
-	queuePub queue.Publisher
-	sc       *storage.Client
-	maxLevel int
+	urlQueuePub queue.Publisher
+	sc          *storage.Client
+	maxLevel    int
 }
 
-func NewCrawler(queuePub queue.Publisher, sc *storage.Client, maxLevel int) *Crawler {
+func NewCrawler(urlQueuePub queue.Publisher, sc *storage.Client, maxLevel int) *Crawler {
 	return &Crawler{
-		queuePub: queuePub,
-		sc:       sc,
-		maxLevel: maxLevel,
+		urlQueuePub: urlQueuePub,
+		sc:          sc,
+		maxLevel:    maxLevel,
 	}
 }
 
 func (c *Crawler) Crawl(item *types.URLQueueItem) {
 	startedAt := time.Now()
-	mime, urls, err := Scrape(item.URL, http.DefaultClient)
-
-	log.Println("crawl: Scape URL", item.URL, "mime:", mime, "level", item.Level, "descendants", len(urls), "duration", time.Now().Sub(startedAt).String(), "error", err)
-
 	urlClient := c.sc.URLClient()
+	defer func() {
+		// Make sure the Job is cleaned up even in if an error happens.
+		if err := urlClient.DeletePending(item.URL, item.Origin); err != nil {
+			log.Println("crawl: Failed to delete pending record for", item.URL, item.Origin)
+		}
+
+		// If there are no more pending entries for this origin, all jobs which contain that
+		// origin which are not already complete can be marked as complete.
+		if complete, err := urlClient.UpdateJobURLIfComplete(item.Origin); err != nil {
+			log.Println("crawl: Failed to update if Job URL is complete", item.Origin, err)
+		} else if complete {
+			log.Println("crawl: Marked Job URL as complete", item.Origin)
+		}
+
+		log.Println("crawl: Finished crawling of", item.URL, item.Level, "duration", time.Now().Sub(startedAt).String())
+	}()
+
+	mime, urls, err := Scrape(item.URL, http.DefaultClient)
+	if err != nil {
+		log.Println("crawl: Failed to request and scrape", item.URL, err)
+		return
+	}
+
+	log.Println("crawl: Request and Scape complete URL", item.URL, "mime:", mime, "level", item.Level, "descendants", len(urls), "duration", time.Now().Sub(startedAt).String(), "error", err)
 
 	// Update mime type for the URL
 	if err := urlClient.Update(item.URL, mime, true); err != nil {
 		log.Println("crawl: failed to add update URL's mime type", item.URL, mime, err)
+		return
 	}
 
 	// Collect the job ids for this origin so their results can be updated
 	jobIdsForOrigin, err := urlClient.GetJobIdsForURL(item.Origin)
 	if err != nil {
-		log.Println("Worker crawl: origin has no associated jobId", item.Origin)
+		log.Println("crawl: origin has no associated jobId", item.Origin)
 		return
 	}
 
-	startedAt = time.Now()
+	// Only add items to the result if they are greater than the first layer
+	// because the first layer is the URLs that are used to start a job,
+	// so they do not make sense to be inserted into the results without a refer.
+	if item.Level > 0 {
+		for _, id := range jobIdsForOrigin {
+			if err := urlClient.AddResult(id, item.URL, item.Refer, mime); err != nil {
+				log.Println("crawl: failed to add result", err, item.Origin, item.Refer, item.URL)
+			}
+		}
+	}
+
 	for i := 0; i < len(urls); i++ {
 		u := urls[i]
 
-		kind := guessURLsMime(u)
-
-		// su := c.sc.ForURL(u)
+		kind := util.GuessURLsMime(u)
+		if url, _ := urlClient.GetURLWithRefer(u, item.URL); url == nil {
+			// Only add the URL if it is already not known set the descendant as known
+			// and from this work item's URL, but it will be marked as not-crawled by by default.
+			if err := urlClient.Add(u, item.URL, kind); err != nil {
+				log.Println("crawl: failed to add image to know URLs", item.URL, u, err)
+			}
+		}
+		// For any URL that will not be enqueued, add it as a result instead
 		for _, id := range jobIdsForOrigin {
 			if err := urlClient.AddResult(id, u, item.URL, kind); err != nil {
-				log.Println("Worker crawl: failed to add result", err, item.Origin, item.URL, u)
+				log.Println("crawl: failed to add result", err, item.Origin, item.URL, u)
 			}
 		}
 
-		if canSkipMime(kind) {
+		if util.CanSkipMime(kind) {
 			urls = append(urls[:i], urls[i+1:]...)
 			i-- // Step back on to pick up what would of been the item at the next index.
 			continue
@@ -73,74 +108,10 @@ func (c *Crawler) Crawl(item *types.URLQueueItem) {
 				Level:  item.Level + 1,
 			}
 			if err := urlClient.AddPending(u, q.Origin); err != nil {
-				log.Println("Worker crawl: failed to add pending URL", err)
+				log.Println("crawl: failed to add pending URL", err)
 			}
 
-			c.queuePub.Send(q)
-			// } else if known, _ := urlClient.KnownWithRefer(u, item.URL); !known {
-		} else if url, _ := urlClient.GetURLWithRefer(u, item.URL); url != nil {
-			// Only add the URL if it is already not known set the descendant as known
-			// and from this work item's URL, but it will be marked as not-crawled by by default.
-			if err := urlClient.Add(u, item.URL, kind); err != nil {
-				log.Println("Worker doWork, failed to add image to know URLs", item.URL, u, err)
-			}
+			c.urlQueuePub.Send(q)
 		}
 	}
-
-	if err := urlClient.DeletePending(item.URL, item.Origin); err != nil {
-		log.Println("Worker crawl: failed to delete pending record for", item.URL, item.Origin)
-	}
-
-	// If there are no more pending entries for this origin, all jobs which contain that
-	// origin which are not already complete can be marked as complete.
-	if pending, _ := urlClient.HasPending(item.Origin); !pending {
-		log.Println("Worker crawl: marking origin as complete", item.Origin)
-		if err := urlClient.MarkJobURLComplete(item.Origin); err != nil {
-			log.Println("Worker doWork, failed to mark jobs completed for", item.Origin, err)
-		}
-	}
-
-	log.Println("Finished crawling of", item.URL, "duration", time.Now().Sub(startedAt).String())
-
-}
-
-// Attempts to identify the content of the URL points to based on
-// the URI path's extension.
-func guessURLsMime(u string) string {
-	parsed, err := url.Parse(u)
-	if err != nil {
-		log.Println("Worker looksLikeImageURL failed to parse URL", u)
-		return ""
-	}
-
-	ext := path.Ext(parsed.Path)
-	if len(ext) == 0 {
-		return ""
-	}
-
-	// lower and trim the leading '.' from the extension
-	ext = strings.ToLower(ext[1:])
-
-	switch ext {
-	case "gif":
-		return "image/gif"
-	case "jpeg", "jpg":
-		return "image/jpeg"
-	case "png":
-		return "image/png"
-	case "css":
-		return "text/css"
-	case "js":
-		return "text/javascript"
-	default:
-		return storage.DefaultURLMime
-	}
-}
-
-// Returns if the content of the URL based on mime type
-// can be ignored and doesn't need to be queued for crawling.
-func canSkipMime(mime string) bool {
-	return strings.HasPrefix(mime, "image") ||
-		mime == "text/css" ||
-		mime == "text/javascript"
 }

@@ -63,7 +63,7 @@ func (h *JobStatusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // the job's current status information.
 func (h *JobStatusHandler) jobStatus(id types.JobId) (*types.JobStatus, *util.Error) {
 	job, err := h.sc.JobClient().GetJob(id)
-	if err != nil {
+	if err != nil || job == nil {
 		return nil, &util.Error{
 			Source: "jobStatus",
 			Info:   fmt.Sprintf("Failed to get job %d status", id),

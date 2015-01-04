@@ -32,8 +32,8 @@ type jobScheduledMsg struct {
 //	- Success: {jobId: 1234}
 //	- Failure: {code: <code>, message: <message>}
 type JobScheduleHandler struct {
-	queuePub queue.Publisher
-	sc       *storage.Client
+	urlQueuePub queue.Publisher
+	sc          *storage.Client
 }
 
 func (h *JobScheduleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +141,7 @@ func (h *JobScheduleHandler) scheduleJob(urls []string) (types.JobId, *util.Erro
 			if err := h.sc.URLClient().AddPending(u.URL, u.URL); err != nil {
 				log.Println("JobScheduleHandler.scheduleJob: failed to add job URL to pending list")
 			}
-			h.queuePub.Send(&types.URLQueueItem{Origin: u.URL, URL: u.URL})
+			h.urlQueuePub.Send(&types.URLQueueItem{Origin: u.URL, URL: u.URL})
 		}
 	}()
 

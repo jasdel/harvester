@@ -23,19 +23,27 @@ func main() {
 
 	// Initialize the queue receiver to receive URLs that are being
 	// queue to be crawled
-	queueRecv, err := queue.NewReceiver(cfg.RecvQueue.ConnURL, cfg.RecvQueue.Topic)
+	urlQueueRecv, err := queue.NewReceiver(cfg.URLQueue.ConnURL, cfg.URLQueue.Topic)
 	if err != nil {
 		log.Fatalln("Queue Receiver initialization failed:", err)
 	}
-	defer queueRecv.Close()
+	defer urlQueueRecv.Close()
+
+	// If queued items have already been crawled, will need to find descendants,
+	// and enqueue them.
+	urlQueuePub, err := queue.NewPublisher(cfg.URLQueue.ConnURL, cfg.URLQueue.Topic)
+	if err != nil {
+		log.Fatalln("Queue Publisher initialization failed:", err)
+	}
+	defer urlQueuePub.Close()
 
 	// Initialize the queue publisher to publish the filtered URLs
 	// to the workers that will perform the crawling
-	queuePub, err := queue.NewPublisher(cfg.PubQueue.ConnURL, cfg.PubQueue.Topic)
+	workQueuePub, err := queue.NewPublisher(cfg.WorkQueue.ConnURL, cfg.WorkQueue.Topic)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalln("Worker Queue Publisher initialization failed", err)
 	}
-	defer queuePub.Close()
+	defer workQueuePub.Close()
 
 	// Initialize the storage so the known and previously crawled state of URLs
 	// can be determined.
@@ -44,21 +52,20 @@ func main() {
 		log.Fatalln("Storage NewClient failed:", err)
 	}
 
-	foreman := NewForeman(queuePub, sc)
+	foreman := NewForeman(workQueuePub, urlQueuePub, sc, cfg.MaxLevel)
 
 	log.Println("Ready: Waiting for URL queue items...")
 	for {
-		item := <-queueRecv.Receive()
-		log.Printf("Foreman: Queue URL: %s, from: %s, origin: %s, level: %d", item.URL, item.Refer, item.Origin, item.Level)
-
+		item := <-urlQueueRecv.Receive()
 		foreman.ProcessQueueItem(item)
 	}
 }
 
 type Config struct {
 	StorageConfig storage.ClientConfig `json:"storage"`
-	RecvQueue     types.QueueConfig    `json:"recvQueue"`
-	PubQueue      types.QueueConfig    `json:"pubQueue"`
+	URLQueue      types.QueueConfig    `json:"urlQueue"`
+	WorkQueue     types.QueueConfig    `json:"workQueue"`
+	MaxLevel      int                  `json:"maxLevel"`
 }
 
 // Loads the configuration file from disk in as a JSON blob.

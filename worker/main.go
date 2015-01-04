@@ -23,19 +23,19 @@ func main() {
 
 	// Initialize the queue receiver of the filter URLs from the foreman.
 	// URLs received from this queue will be crawled
-	queueRecv, err := queue.NewReceiver(cfg.RecvQueue.ConnURL, cfg.RecvQueue.Topic)
+	workQueueRecv, err := queue.NewReceiver(cfg.WorkQueue.ConnURL, cfg.WorkQueue.Topic)
 	if err != nil {
 		log.Fatalln("Worker Queue Receiver: initialization failed:", err)
 	}
-	defer queueRecv.Close()
+	defer workQueueRecv.Close()
 
 	// Initialize the queue publisher for publishing descendants of
 	// a previously queued URL to be queued for crawling
-	queuePub, err := queue.NewPublisher(cfg.PubQueue.ConnURL, cfg.PubQueue.Topic)
+	urlQueuePub, err := queue.NewPublisher(cfg.URLQueue.ConnURL, cfg.URLQueue.Topic)
 	if err != nil {
 		log.Fatalln("Worker Queue Publisher: initialization failed:", err)
 	}
-	defer queuePub.Close()
+	defer urlQueuePub.Close()
 
 	// Initialize the storage for determining the status of a URL,
 	// updating URL values, and Job completeness status
@@ -44,11 +44,11 @@ func main() {
 		log.Fatalln("Worker Storage Client: initialization failed:", err)
 	}
 
-	crawler := NewCrawler(queuePub, sc, cfg.MaxLevel)
+	crawler := NewCrawler(urlQueuePub, sc, cfg.MaxLevel)
 
 	log.Println("Ready: Waiting for URL work items...")
 	for {
-		item := <-queueRecv.Receive()
+		item := <-workQueueRecv.Receive()
 		crawler.Crawl(item)
 
 		<-time.After(cfg.WorkDelay)
@@ -58,8 +58,8 @@ func main() {
 // TODO document these fields
 type Config struct {
 	StorageConfig storage.ClientConfig `json:"storage"`
-	RecvQueue     types.QueueConfig    `json:"recvQueue"`
-	PubQueue      types.QueueConfig    `json:"pubQueue"`
+	WorkQueue     types.QueueConfig    `json:"workQueue"`
+	URLQueue      types.QueueConfig    `json:"urlQueue"`
 	MaxLevel      int                  `json:"maxLevel"`
 	WorkDelayStr  string               `json:"workDelay"`
 	WorkDelay     time.Duration        `json:"-"`

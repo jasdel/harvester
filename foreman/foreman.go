@@ -4,23 +4,29 @@ import (
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
 	"github.com/jasdel/harvester/internal/types"
+	"github.com/jasdel/harvester/internal/util"
 	"log"
 )
 
 type Foreman struct {
-	queuePub queue.Publisher
-	sc       *storage.Client
+	workQueuePub queue.Publisher
+	urlQueuePub  queue.Publisher
+	sc           *storage.Client
+	maxLevel     int
 }
 
-func NewForeman(queuePub queue.Publisher, sc *storage.Client) *Foreman {
+func NewForeman(workQueuePub queue.Publisher, urlQueuePub queue.Publisher, sc *storage.Client, maxLevel int) *Foreman {
 	return &Foreman{
-		queuePub: queuePub,
-		sc:       sc,
+		workQueuePub: workQueuePub,
+		urlQueuePub:  urlQueuePub,
+		sc:           sc,
+		maxLevel:     maxLevel,
 	}
 }
 
 func (f *Foreman) ProcessQueueItem(item *types.URLQueueItem) {
 	urlClient := f.sc.URLClient()
+	log.Printf("Foreman: Queue URL: %s, from: %s, origin: %s, level: %d", item.URL, item.Refer, item.Origin, item.Level)
 
 	url, err := urlClient.GetURLWithRefer(item.URL, item.Refer)
 	if err != nil {
@@ -30,30 +36,55 @@ func (f *Foreman) ProcessQueueItem(item *types.URLQueueItem) {
 
 	if url != nil {
 		if url.Crawled {
-			log.Println("URL already known and crawled, skipping, adding descendants", item.URL, item.Refer)
-			urlClient.DeletePending(item.URL, item.Origin)
-
-			// If this item has already been crawled and it has a refer,
-			// add the item to the results for all not completed origin job URLs.
-			// Not having a refer is an origin URL from a job.
-			if item.Refer != "" {
-				if err := addToResults(urlClient, item, url); err != nil {
-					log.Println("Failed to add already crawled item to results", item.URL, err)
-				}
-			}
-			// TODO need to check if this was the last job, and if so mark as complete
-			// Get all URLs where this URL is the refer, and enqueue them, if none, run check for origin complete
+			f.processAlreadyCrawled(item, url)
 			return
 		}
 	} else {
 		urlClient.Add(item.URL, item.Refer, storage.DefaultURLMime)
 	}
 
-	f.queuePub.Send(item)
+	f.workQueuePub.Send(item)
+}
+
+// If an item has already been crawled this will determine if that item's descendants
+// should be added the job results, or queued to be crawled them selves.
+func (f *Foreman) processAlreadyCrawled(item *types.URLQueueItem, url *storage.URL) {
+	log.Println("URL already known and crawled, skipping, checking descendants", item.URL, item.Refer)
+	urlClient := f.sc.URLClient()
+
+	defer func() {
+		// Make sure the Job is cleaned up even in if an error happens.
+		if err := urlClient.DeletePending(item.URL, item.Origin); err != nil {
+			log.Println("Failed to delete pending record for", item.URL, item.Origin)
+		}
+
+		// If there are no more pending entries for this origin, all jobs which contain that
+		// origin which are not already complete can be marked as complete.
+		if complete, err := urlClient.UpdateJobURLIfComplete(item.Origin); err != nil {
+			log.Println("Failed to update if Job URL is complete", item.Origin, err)
+		} else if complete {
+			log.Println("Marked Job URL as complete", item.Origin)
+		}
+	}()
+
+	// Only add items to the result if they are greater than the first layer
+	// because the first layer is the URLs that are used to start a job,
+	// so they do not make sense to be inserted into the results without a refer.
+	if item.Level > 0 {
+		if err := f.addToResults(item, url); err != nil {
+			log.Println("Failed to add already crawled item to results", item.URL, err)
+		}
+	}
+
+	if err := f.processDescendants(item); err != nil {
+		log.Println("Failed to process known queued item's descendants", item.URL, err)
+	}
 }
 
 // Adds the item to all Jobs associated with the item's origin results
-func addToResults(urlClient *storage.URLClient, item *types.URLQueueItem, knownURL *storage.URL) error {
+func (f *Foreman) addToResults(item *types.URLQueueItem, knownURL *storage.URL) error {
+	urlClient := f.sc.URLClient()
+
 	jobIdsForOrigin, err := urlClient.GetJobIdsForURL(item.Origin)
 	if err != nil {
 		return err
@@ -63,5 +94,72 @@ func addToResults(urlClient *storage.URLClient, item *types.URLQueueItem, knownU
 			return err
 		}
 	}
+	return nil
+}
+
+// Processes descendants of a URL which is both known and already crawled.
+// The descendants will be either added to the urlQueue if the maxLevel hasn't
+// been reached yet, or will be just added as results to
+func (f *Foreman) processDescendants(item *types.URLQueueItem) error {
+	urlClient := f.sc.URLClient()
+
+	// Get all URLs where this item is a refer to, so that they can be queued
+	// for crawling.
+	urls, err := urlClient.GetAllURLsWithRefer(item.URL)
+	if err != nil {
+		log.Println("Failed to get URL descendants of", item.URL, err)
+		return err
+	}
+
+	// Get all URLs where this URL is the refer, and enqueue them. But if the
+	// level would exceed the max, just add the descendants to the results.
+	if item.Level+1 < f.maxLevel {
+		log.Println("enqueuing descendants")
+		if err := f.enqueueURLs(item, urls); err != nil {
+			log.Println("Failed to enqueue URLs", err)
+			return err
+		}
+	} else {
+		log.Println("Adding descendants to results")
+		// Since the URLs won't be enqueued
+		jobIds, err := urlClient.GetJobIdsForURL(item.Origin)
+		if err != nil {
+			log.Println("Failed to get associated JobIds", item.Origin, err)
+			return err
+		}
+		if err := urlClient.AddURLsToResults(jobIds, item.URL, urls); err != nil {
+			log.Println("Failed to add Job URL results", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Enqueue a list of URLs with a single refer.  The URLs are added to both the
+// pending Job, and urlQueue.
+func (f *Foreman) enqueueURLs(refer *types.URLQueueItem, urls []*storage.URL) error {
+	urlClient := f.sc.URLClient()
+
+	for _, u := range urls {
+		if util.CanSkipMime(u.Mime) {
+			// If the URL is a type that can be skipped and doesn't need to be
+			// crawled,
+			continue
+		}
+
+		q := &types.URLQueueItem{
+			Origin: refer.Origin,
+			Refer:  refer.URL,
+			URL:    u.URL,
+			Level:  refer.Level + 1,
+		}
+		if err := urlClient.AddPending(u.URL, q.Origin); err != nil {
+			return err
+		}
+
+		f.urlQueuePub.Send(q)
+	}
+
 	return nil
 }

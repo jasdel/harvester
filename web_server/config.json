@@ -7,7 +7,7 @@
 		"port":   24001
 	},
 
-	"pubQueue": {
+	"urlQueue": {
 		"connURL": "nats://localhost:4222",
 		"topic":   "url_queue"
 	},

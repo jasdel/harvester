@@ -33,11 +33,11 @@ func main() {
 	}
 
 	// Initialize the queue for publishing scheduled Job URLs
-	queuePub, err := queue.NewPublisher(cfg.Queue.ConnURL, cfg.Queue.Topic)
+	urlQueuePub, err := queue.NewPublisher(cfg.URLQueue.ConnURL, cfg.URLQueue.Topic)
 	if err != nil {
 		log.Fatalln("Queue Publisher initialization failed:", err)
 	}
-	defer queuePub.Close()
+	defer urlQueuePub.Close()
 
 	// Initialize the storage for checking the status and results of jobs
 	sc, err := storage.NewClient(cfg.StorageConfig)
@@ -47,7 +47,7 @@ func main() {
 
 	// Create the HTTP handlers to be able to provide an interface for serving
 	// job schedule, status, and result requests.
-	http.Handle("/", &JobScheduleHandler{queuePub: queuePub, sc: sc})
+	http.Handle("/", &JobScheduleHandler{urlQueuePub: urlQueuePub, sc: sc})
 	http.Handle("/status/", &JobStatusHandler{sc: sc})
 	http.Handle("/result/", &JobResultHandler{sc: sc})
 
@@ -59,7 +59,7 @@ func main() {
 
 type Config struct {
 	StorageConfig storage.ClientConfig `json:"storage"`
-	Queue         types.QueueConfig    `json:"pubQueue"`
+	URLQueue      types.QueueConfig    `json:"urlQueue"`
 	HTTPAddr      string               `json:"httpAddr"`
 }
 

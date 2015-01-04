@@ -7,13 +7,15 @@
 		"port":   24001
 	},
 
-	"recvQueue": {
+	"urlQueue": {
 		"connURL": "nats://localhost:4222",
 		"topic":   "url_queue"
 	},
 
-	"pubQueue": {
+	"workQueue": {
 		"connURL": "nats://localhost:4222",
 		"topic":   "work_queue"
-	}
+	},
+
+	"maxLevel": 2
 }

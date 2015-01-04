@@ -21,63 +21,31 @@ func (u *URLClient) GetURLWithRefer(url, refer string) (*URL, error) {
 	return getURLFromRow(u.client.db.QueryRow(queryURLWithRefer, url, refer))
 }
 
-func getURLFromRow(row *sql.Row) (*URL, error) {
-	var (
-		id        sql.NullInt64
-		url       sql.NullString
-		refer     sql.NullString
-		mime      sql.NullString
-		crawled   sql.NullBool
-		createdOn pq.NullTime
-	)
+// Returns a list of direct descendants of the passed in URL.  The passed in URL
+// will be the 'refer' value for each of the returned URLs, if there are any.
+func (u *URLClient) GetAllURLsWithRefer(refer string) ([]*URL, error) {
+	const queryAllURLsWithRefer = `SELECT id,url,refer,mime,crawled,created_on FROM url WHERE refer = $1`
 
-	if err := row.Scan(&id, &url, &refer, &mime, &crawled, &createdOn); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
+	rows, err := u.client.db.Query(queryAllURLsWithRefer, refer)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	urls := []*URL{}
+	for rows.Next() {
+		url, err := getURLFromRows(rows)
+		if err != nil {
+			return nil, err
 		}
+		urls = append(urls, url)
+	}
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	return &URL{
-		Id:        id.Int64,
-		URL:       url.String,
-		Refer:     refer.String,
-		Mime:      mime.String,
-		Crawled:   crawled.Bool,
-		CreatedOn: createdOn.Time,
-	}, nil
+	return urls, nil
 }
-
-// func (u *URLClient) Known() (bool, error) {
-// 	const queryURLKnown = `SELECT exists(SELECT 1 FROM url WHERE url = $1)`
-
-// 	var known sql.NullBool
-// 	if err := u.client.db.QueryRow(queryURLKnown, u.url).Scan(&known); err != nil {
-// 		return false, err
-// 	}
-
-// 	return known.Valid && known.Bool, nil
-// }
-
-// func (u *URLClient) KnownWithRefer(refer string) (bool, error) {
-// 	const queryURLKnownWRefer = `SELECT exists(SELECT 1 FROM url WHERE url = $1 AND refer = $2)`
-// 	var known sql.NullBool
-// 	if err := u.client.db.QueryRow(queryURLKnownWRefer, u.url, refer).Scan(&known); err != nil {
-// 		return false, err
-// 	}
-
-// 	return known.Valid && known.Bool, nil
-// }
-
-// func (u *URLClient) Crawled() (bool, error) {
-// 	const queryURLCrawled = `SELECT exists(SELECT 1 FROM url WHERE url = $1 AND crawled = TRUE)`
-// 	var crawled sql.NullBool
-// 	if err := u.client.db.QueryRow(queryURLCrawled, u.url).Scan(&crawled); err != nil {
-// 		return false, err
-// 	}
-
-// 	return crawled.Valid && crawled.Bool, nil
-// }
 
 // Adds a URL to the database for a specific URL/refer combination.
 // mime is the content-type of the url
@@ -126,6 +94,18 @@ func (u *URLClient) AddResult(jobId types.JobId, url, refer, mime string) error 
 
 	if _, err := u.client.db.Exec(queryURLInsertResult, url, jobId, refer, mime); err != nil {
 		return err
+	}
+	return nil
+}
+
+// Adds a batch of URLs to the result
+func (u *URLClient) AddURLsToResults(jobIds []types.JobId, refer string, urls []*URL) error {
+	for _, jobId := range jobIds {
+		for _, url := range urls {
+			if err := u.AddResult(jobId, url.URL, refer, url.Mime); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -179,4 +159,79 @@ func (u *URLClient) GetJobIdsForURL(url string) ([]types.JobId, error) {
 	}
 
 	return jobIds, nil
+}
+
+// Checks if a URL has any pending entries in the job URL pending table.
+// If there are no longer any entries, All URLs associated with a jobs, not yet completed
+// will be marked as completed.
+func (u *URLClient) UpdateJobURLIfComplete(url string) (bool, error) {
+	if pending, _ := u.HasPending(url); !pending {
+		if err := u.MarkJobURLComplete(url); err != nil {
+			return false, err
+		} else {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// Extracts the URL from a QueryRow row.
+func getURLFromRow(row *sql.Row) (*URL, error) {
+	var (
+		id        sql.NullInt64
+		url       sql.NullString
+		refer     sql.NullString
+		mime      sql.NullString
+		crawled   sql.NullBool
+		createdOn pq.NullTime
+	)
+
+	if err := row.Scan(&id, &url, &refer, &mime, &crawled, &createdOn); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	if !id.Valid || !url.Valid {
+		return nil, fmt.Errorf("Invalid URL result from QueryRow scan")
+	}
+
+	return &URL{
+		Id:        id.Int64,
+		URL:       url.String,
+		Refer:     refer.String,
+		Mime:      mime.String,
+		Crawled:   crawled.Bool,
+		CreatedOn: createdOn.Time,
+	}, nil
+}
+
+// Extracts the URL fields from a Query rows.
+func getURLFromRows(rows *sql.Rows) (*URL, error) {
+	var (
+		id        sql.NullInt64
+		url       sql.NullString
+		refer     sql.NullString
+		mime      sql.NullString
+		crawled   sql.NullBool
+		createdOn pq.NullTime
+	)
+
+	if err := rows.Scan(&id, &url, &refer, &mime, &crawled, &createdOn); err != nil {
+		return nil, err
+	}
+
+	if !id.Valid || !url.Valid {
+		return nil, fmt.Errorf("Invalid URL result from QueryRow scan")
+	}
+
+	return &URL{
+		Id:        id.Int64,
+		URL:       url.String,
+		Refer:     refer.String,
+		Mime:      mime.String,
+		Crawled:   crawled.Bool,
+		CreatedOn: createdOn.Time,
+	}, nil
 }
