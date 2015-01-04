@@ -60,7 +60,7 @@ func (h *JobResultHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 // e.g: mimeFilter := "image" // returns all image URLs
 func (h *JobResultHandler) jobResult(id types.JobId, mimeFilter string) (types.JobResults, *util.Error) {
-	result, err := h.sc.ForJob(id).Result(mimeFilter)
+	result, err := h.sc.JobClient().Result(id, mimeFilter)
 	if err != nil {
 		return nil, &util.Error{
 			Source: "jobResult",

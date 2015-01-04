@@ -3,7 +3,6 @@ package storage
 import (
 	"database/sql"
 	"fmt"
-	"github.com/jasdel/harvester/internal/types"
 	_ "github.com/lib/pq"
 )
 
@@ -46,47 +45,18 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	}, nil
 }
 
-const queryInsertJob = `INSERT INTO job DEFAULT VALUES RETURNING id`
-const queryInsertJobURLs = `INSERT INTO job_url (job_id, url) VALUES ($1, $2)`
-
-// Create a new job entry with its URLS, returning the job object
-func (c *Client) CreateJob(urls []string) (*JobClient, error) {
-	var id sql.NullInt64
-	if err := c.db.QueryRow(queryInsertJob).Scan(&id); err != nil {
-		return nil, err
-	}
-	if !id.Valid {
-		return nil, fmt.Errorf("No jobId created")
-	}
-
-	// TODO This should be able to be done in a single statement
-	for _, u := range urls {
-		if _, err := c.db.Exec(queryInsertJobURLs, id.Int64, u); err != nil {
-			return nil, err
-		}
-	}
-
-	return c.ForJob(types.JobId(id.Int64)), nil
-}
-
 // Return an Job which can be used to perform queries and manipulation
 // of job data stored in storage.
-func (c *Client) ForJob(id types.JobId) *JobClient {
+func (c *Client) JobClient() *JobClient {
 	return &JobClient{
-		id:     id,
 		client: c,
 	}
 }
 
 // Return an URL which can be used to perform queries and manipulation
 // of URL data stored in storage.
-func (c *Client) ForURL(url string) *URLClient {
+func (c *Client) URLClient() *URLClient {
 	return &URLClient{
-		url:    url,
 		client: c,
 	}
-}
-
-func (c *Client) GetURL(url string) *URL {
-
 }

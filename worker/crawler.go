@@ -26,19 +26,21 @@ func NewCrawler(queuePub queue.Publisher, sc *storage.Client, maxLevel int) *Cra
 	}
 }
 
-func (c *Crawler) crawl(item *types.URLQueueItem) {
+func (c *Crawler) Crawl(item *types.URLQueueItem) {
 	startedAt := time.Now()
 	mime, urls, err := Scrape(item.URL, http.DefaultClient)
 
-	log.Println("Worker crawl: Scape URL", item.URL, "mime:", mime, "level", item.Level, "descendants", len(urls), "duration", time.Now().Sub(startedAt).String(), "error", err)
+	log.Println("crawl: Scape URL", item.URL, "mime:", mime, "level", item.Level, "descendants", len(urls), "duration", time.Now().Sub(startedAt).String(), "error", err)
+
+	urlClient := c.sc.URLClient()
 
 	// Update mime type for the URL
-	if err := c.sc.ForURL(item.URL).Update(mime, true); err != nil {
-		log.Println("Worker crawl: failed to add update URL's mime type", item.URL, mime, err)
+	if err := urlClient.Update(item.URL, mime, true); err != nil {
+		log.Println("crawl: failed to add update URL's mime type", item.URL, mime, err)
 	}
 
 	// Collect the job ids for this origin so their results can be updated
-	jobIdsForOrigin, err := c.sc.ForURL(item.Origin).GetJobIds()
+	jobIdsForOrigin, err := urlClient.GetJobIdsForURL(item.Origin)
 	if err != nil {
 		log.Println("Worker crawl: origin has no associated jobId", item.Origin)
 		return
@@ -50,9 +52,9 @@ func (c *Crawler) crawl(item *types.URLQueueItem) {
 
 		kind := guessURLsMime(u)
 
-		su := c.sc.ForURL(u)
+		// su := c.sc.ForURL(u)
 		for _, id := range jobIdsForOrigin {
-			if err := su.AddResult(id, item.Origin, item.URL, kind); err != nil {
+			if err := urlClient.AddResult(id, u, item.URL, kind); err != nil {
 				log.Println("Worker crawl: failed to add result", err, item.Origin, item.URL, u)
 			}
 		}
@@ -70,28 +72,30 @@ func (c *Crawler) crawl(item *types.URLQueueItem) {
 				URL:    u,
 				Level:  item.Level + 1,
 			}
-			if err := su.AddPending(q.Origin); err != nil {
+			if err := urlClient.AddPending(u, q.Origin); err != nil {
 				log.Println("Worker crawl: failed to add pending URL", err)
 			}
 
 			c.queuePub.Send(q)
-		} else if known, _ := su.KnownWithRefer(item.URL); !known {
+			// } else if known, _ := urlClient.KnownWithRefer(u, item.URL); !known {
+		} else if url, _ := urlClient.GetURLWithRefer(u, item.URL); url != nil {
 			// Only add the URL if it is already not known set the descendant as known
 			// and from this work item's URL, but it will be marked as not-crawled by by default.
-			if err := su.Add(item.URL, kind); err != nil {
+			if err := urlClient.Add(u, item.URL, kind); err != nil {
 				log.Println("Worker doWork, failed to add image to know URLs", item.URL, u, err)
 			}
 		}
 	}
 
-	if err := c.sc.ForURL(item.URL).DeletePending(item.Origin); err != nil {
+	if err := urlClient.DeletePending(item.URL, item.Origin); err != nil {
 		log.Println("Worker crawl: failed to delete pending record for", item.URL, item.Origin)
 	}
 
-	origSU := c.sc.ForURL(item.Origin)
-	if pending, _ := origSU.HasPending(); !pending {
+	// If there are no more pending entries for this origin, all jobs which contain that
+	// origin which are not already complete can be marked as complete.
+	if pending, _ := urlClient.HasPending(item.Origin); !pending {
 		log.Println("Worker crawl: marking origin as complete", item.Origin)
-		if err := origSU.MarkJobURLComplete(); err != nil {
+		if err := urlClient.MarkJobURLComplete(item.Origin); err != nil {
 			log.Println("Worker doWork, failed to mark jobs completed for", item.Origin, err)
 		}
 	}

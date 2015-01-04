@@ -9,6 +9,7 @@ type URL struct {
 	Id        int64
 	URL       string
 	Refer     string
+	Mime      string
 	Crawled   bool
 	CreatedOn time.Time
 }
@@ -16,11 +17,36 @@ type URL struct {
 type Job struct {
 	Id        types.JobId
 	URLs      []JobURL
-	createdOn time.Time
+	CreatedOn time.Time
+}
+
+// Returns the status of the job.  The status includes the progress
+// of completed vs pending, and total elapsed time.
+func (j *Job) Status() *types.JobStatus {
+	status := &types.JobStatus{Id: j.Id}
+	var compTime time.Time
+	for _, u := range j.URLs {
+		if u.Completed {
+			status.Completed++
+			if compTime.Before(u.CompletedOn) {
+				compTime = u.CompletedOn
+			}
+		} else {
+			status.Pending++
+		}
+	}
+
+	if status.Pending != 0 {
+		compTime = time.Now().UTC()
+	}
+	status.Elapsed = compTime.Sub(j.CreatedOn)
+
+	return status
 }
 
 type JobURL struct {
 	URL         string
+	Completed   bool
 	CompletedOn time.Time
 	JobId       types.JobId
 }

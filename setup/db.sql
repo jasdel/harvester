@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS job_url (
 -- Results for each job
 CREATE TABLE IF NOT EXISTS job_result (
     job_id  INT    NOT NULL,
-    origin  TEXT   NOT NULL,
+    refer   TEXT   NOT NULL,
     url     TEXT   NOT NULL,
     mime    TEXT
 );
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS url (
     id         serial PRIMARY KEY,
     mime       TEXT,            -- content type this URL references
     url        TEXT   NOT NULL,
-    refer      TEXT   NOT NULL, -- Where the URL was encountered from
+    refer      TEXT   NOT NULL DEFAULT '', -- Where the URL was encountered from
     crawled    BOOL   NOT NULL DEFAULT FALSE,
     created_on TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );

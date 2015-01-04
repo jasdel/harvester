@@ -62,7 +62,7 @@ func (h *JobStatusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Connects to the remote service hosting job information, and
 // the job's current status information.
 func (h *JobStatusHandler) jobStatus(id types.JobId) (*types.JobStatus, *util.Error) {
-	status, err := h.sc.ForJob(id).Status()
+	job, err := h.sc.JobClient().GetJob(id)
 	if err != nil {
 		return nil, &util.Error{
 			Source: "jobStatus",
@@ -71,5 +71,5 @@ func (h *JobStatusHandler) jobStatus(id types.JobId) (*types.JobStatus, *util.Er
 		}
 	}
 
-	return status, nil
+	return job.Status(), nil
 }

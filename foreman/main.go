@@ -44,23 +44,14 @@ func main() {
 		log.Fatalln("Storage NewClient failed:", err)
 	}
 
+	foreman := NewForeman(queuePub, sc)
+
 	log.Println("Ready: Waiting for URL queue items...")
 	for {
 		item := <-queueRecv.Receive()
 		log.Printf("Foreman: Queue URL: %s, from: %s, origin: %s, level: %d", item.URL, item.Refer, item.Origin, item.Level)
 
-		su := sc.ForURL(item.URL)
-		if crawled, _ := su.Crawled(); crawled {
-			log.Println("Foreman: URL already known and crawled, skipping", item.URL, item.Origin, item.Level)
-			su.DeletePending(item.Origin)
-			// TODO need to check if this was the last job, and if so mark as complete
-			// Get all URLs where this URL is the refer, and enqueue them
-			continue
-		} else if known, _ := su.Known(); !known {
-			su.Add(item.Refer, storage.DefaultURLMime)
-		}
-
-		queuePub.Send(item)
+		foreman.ProcessQueueItem(item)
 	}
 }
 

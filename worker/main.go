@@ -44,12 +44,12 @@ func main() {
 		log.Fatalln("Worker Storage Client: initialization failed:", err)
 	}
 
-	crawler := Crawler{queuePub: queuePub, sc: sc, maxLevel: cfg.MaxLevel}
+	crawler := NewCrawler(queuePub, sc, cfg.MaxLevel)
 
 	log.Println("Ready: Waiting for URL work items...")
 	for {
 		item := <-queueRecv.Receive()
-		crawler.crawl(item)
+		crawler.Crawl(item)
 
 		<-time.After(cfg.WorkDelay)
 	}

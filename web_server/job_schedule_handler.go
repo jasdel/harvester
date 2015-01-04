@@ -127,7 +127,7 @@ func validateJobURL(jobURL string) (string, error) {
 // a job id will be returned if the job was successfully created, and
 // error if there was a failure.
 func (h *JobScheduleHandler) scheduleJob(urls []string) (types.JobId, *util.Error) {
-	job, err := h.sc.CreateJob(urls)
+	job, err := h.sc.JobClient().CreateJob(urls)
 	if err != nil {
 		return types.InvalidJobId, &util.Error{
 			Source: "JobScheduleHandler.scheduleJob",
@@ -137,13 +137,13 @@ func (h *JobScheduleHandler) scheduleJob(urls []string) (types.JobId, *util.Erro
 	}
 
 	go func() {
-		for _, u := range urls {
-			if err := h.sc.ForURL(u).AddPending(u); err != nil {
+		for _, u := range job.URLs {
+			if err := h.sc.URLClient().AddPending(u.URL, u.URL); err != nil {
 				log.Println("JobScheduleHandler.scheduleJob: failed to add job URL to pending list")
 			}
-			h.queuePub.Send(&types.URLQueueItem{Origin: u, URL: u})
+			h.queuePub.Send(&types.URLQueueItem{Origin: u.URL, URL: u.URL})
 		}
 	}()
 
-	return job.Id(), nil
+	return job.Id, nil
 }
