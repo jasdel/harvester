@@ -8,19 +8,19 @@ import (
 	"time"
 )
 
-type Job struct {
+type JobClient struct {
 	id     types.JobId
 	client *Client
 }
 
-func (j *Job) Id() types.JobId {
+func (j *JobClient) Id() types.JobId {
 	return j.id
 }
 
 const queryJob = `SELECT created_on FROM job WHERE id = $1`
 const queryJobURLStatus = `SELECT completed_on FROM job_url WHERE job_id = $1`
 
-func (j *Job) Status() (*types.JobStatus, error) {
+func (j *JobClient) Status() (*types.JobStatus, error) {
 	var jobStartedOn pq.NullTime
 	if err := j.client.db.QueryRow(queryJob, j.id).Scan(&jobStartedOn); err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func (j *Job) Status() (*types.JobStatus, error) {
 const queryJobResult = `SELECT origin,url,mime FROM job_result WHERE job_id = $1 AND mime like $2`
 
 // Queries the results images for each image URL
-func (j *Job) Result(mimeFilter string) (types.JobResults, error) {
+func (j *JobClient) Result(mimeFilter string) (types.JobResults, error) {
 	rows, err := j.client.db.Query(queryJobResult, j.id, mimeFilter+"%")
 	if err != nil {
 		return nil, err

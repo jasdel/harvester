@@ -15,6 +15,7 @@ QueueService receives URL queue add
 +|-> Pull URLQueueItem off queue
 +|-> If URL is crawled already
 	+|-> remove from pending list
+!!!!!|-> Get URLs which are direct descendants of this URL, add to results, and queue up descendants, incrementing level
 	+|-> get next queue item
 +|-> Else if not known
 	+|-> Add URL to known

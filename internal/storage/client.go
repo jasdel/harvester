@@ -50,7 +50,7 @@ const queryInsertJob = `INSERT INTO job DEFAULT VALUES RETURNING id`
 const queryInsertJobURLs = `INSERT INTO job_url (job_id, url) VALUES ($1, $2)`
 
 // Create a new job entry with its URLS, returning the job object
-func (c *Client) CreateJob(urls []string) (*Job, error) {
+func (c *Client) CreateJob(urls []string) (*JobClient, error) {
 	var id sql.NullInt64
 	if err := c.db.QueryRow(queryInsertJob).Scan(&id); err != nil {
 		return nil, err
@@ -66,16 +66,13 @@ func (c *Client) CreateJob(urls []string) (*Job, error) {
 		}
 	}
 
-	return &Job{
-		id:     types.JobId(id.Int64),
-		client: c,
-	}, nil
+	return c.ForJob(types.JobId(id.Int64)), nil
 }
 
 // Return an Job which can be used to perform queries and manipulation
 // of job data stored in storage.
-func (c *Client) ForJob(id types.JobId) *Job {
-	return &Job{
+func (c *Client) ForJob(id types.JobId) *JobClient {
+	return &JobClient{
 		id:     id,
 		client: c,
 	}
@@ -83,9 +80,13 @@ func (c *Client) ForJob(id types.JobId) *Job {
 
 // Return an URL which can be used to perform queries and manipulation
 // of URL data stored in storage.
-func (c *Client) ForURL(url string) *URL {
-	return &URL{
+func (c *Client) ForURL(url string) *URLClient {
+	return &URLClient{
 		url:    url,
 		client: c,
 	}
+}
+
+func (c *Client) GetURL(url string) *URL {
+
 }
