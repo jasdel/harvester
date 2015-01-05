@@ -82,6 +82,7 @@ WHERE url_link.refer_id = $1`
 // Adds a new URL to the database returning a URL object for it.
 // If no mime is known us common.DefaultMime in its place.
 func (u *URLClient) Add(url, mime string) (*URL, error) {
+	// magic
 	const queryURLAdd = `
 WITH s AS (
     SELECT id, url

@@ -11,8 +11,9 @@ import (
 )
 
 // Web server for exposing an interface for scheduling jobs, checking their status, and
-// receiving their result. The endpoints exposed are:
+// receiving their result.
 //
+// The endpoints exposed are:
 // POST: /
 //		- Schedule Job. Body is newline separated list of URls to scheduled to be crawled.
 //
@@ -21,6 +22,10 @@ import (
 //
 // GET: /result/:jobId
 //		- Get the result of an already scheduled job
+//
+// Queues Used:
+// Publish to URL Queue:
+// Scheduled Job URLs will be sent to the URL Queue to be filtered and later crawled.
 //
 func main() {
 	cfgFilename := flag.String("config", "config.json", "The web server configuration file.")

@@ -11,6 +11,20 @@ import (
 	"time"
 )
 
+// Worker pulls for the Worker queue, crawls the URLs and enqueues any descendant URLs
+// for further crawling. Results of crawling the URLs are also added to the origin Job
+// URL's result set.
+//
+// Queues Used:
+// Receives from Worker Queue:
+// Work items will be received by the workers, and crawled
+// If crawling the work item produces any URLs those URLs will be enqueued for processing
+// or added directly to the origin Job URL's result based on the level depth from their origin.
+//
+// Publish to URL Queue:
+// If crawling a work item produces any descendant URLs those URLs will be enqueued to be
+// crawled, or added to the origin Job URL's results.
+//
 func main() {
 	cfgFilename := flag.String("config", "config.json", "The web server configuration file.")
 	flag.Parse()

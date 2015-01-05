@@ -11,6 +11,21 @@ import (
 
 // Foreman is an intermediate Queue filter which filters out URLs which have previously
 // been crawled.
+//
+// Queues Used:
+// Receive from URL Queue:
+// The URL Queue provides URLQueueItems that will be filtered
+// and sent to the worker for processing. A check against the cache will be made to ensure
+// the same URL is not crawled multiple times.
+//
+// Publish to URL Queue:
+// If an item is cached or can be skipped, its descendants will
+// be published to the URL Queue so they can be processed.
+//
+// Publish to Work Queue:
+// Once a URL item is filtered, and not cached it will be sent
+// to the Work Queue to be crawled.
+//
 func main() {
 	cfgFilename := flag.String("config", "config.json", "The foreman configuration file.")
 	flag.Parse()

@@ -10,12 +10,16 @@ import (
 	"time"
 )
 
+// Searches for and extracts URLs from a page. Those URLs are then queued up for recursive
+// crawling with maximum depth of the passed in max level.
 type Crawler struct {
 	urlQueuePub queue.Publisher
 	sc          *storage.Client
 	maxLevel    int
 }
 
+// Creates a new instance of the Crawler. The crawler is save to be run across multiple
+// go-routines.
 func NewCrawler(urlQueuePub queue.Publisher, sc *storage.Client, maxLevel int) *Crawler {
 	return &Crawler{
 		urlQueuePub: urlQueuePub,
@@ -24,6 +28,15 @@ func NewCrawler(urlQueuePub queue.Publisher, sc *storage.Client, maxLevel int) *
 	}
 }
 
+// Retrieves the content of the item URL scrapes it for URLs.  Those descendant URLs
+// are then either added back into the URL queue or added directly to a job's results.
+// The URLs will be added to the URL queue if when the passed in item's Level is incremented
+// and won't breach the Max Level of distance from the origin URL.
+//
+// When a crawl is complete the associated pending URL with this item will be removed,
+// and a check to determine if there are anymore pending URLs for the item's Origin
+// will be made. If there are no longer any pending URLs the Origin's Job URL entry
+// will be marked as completed.
 func (c *Crawler) Crawl(item *common.URLQueueItem) {
 	startedAt := time.Now()
 	urlClient := c.sc.URLClient()
@@ -86,10 +99,12 @@ func (c *Crawler) Crawl(item *common.URLQueueItem) {
 	}
 }
 
+// Iterates over the raw URLs fond on the page. These URLs will be added back into the
+// URL Queue if the max level distance from the origin hasn't been reached yet. If the
+// level has been reached the URLs will be just added to the Origin's Job URL result.
 func (c *Crawler) processURLDescendants(jobIds []common.JobId, referItem *common.URLQueueItem, urls []string) error {
 	urlClient := c.sc.URLClient()
 
-	// urlRecs := make([]*storage.URL, len(urls))
 	for i := 0; i < len(urls); i++ {
 		u := urls[i]
 
@@ -98,7 +113,6 @@ func (c *Crawler) processURLDescendants(jobIds []common.JobId, referItem *common
 		if err != nil {
 			return fmt.Errorf("Failed to get or add URL", u)
 		}
-		// urlRecs[i] = urlRec
 
 		// Link the descendant with the refer, Ignore errors about duplicates
 		urlClient.AddLink(urlRec.Id, referItem.URLId)
