@@ -35,7 +35,6 @@ CREATE TABLE IF NOT EXISTS job_result (
     job_id   INT  NOT NULL,
     refer_Id INT  NOT NULL, -- URL which this job URL result was found on
     url_id   INT  NOT NULL, -- URL for this result
-    -- mime     TEXT DEFAULT '', -- content type this URL result references
 
     FOREIGN KEY (refer_id) REFERENCES url(id),
     FOREIGN KEY (url_id)   REFERENCES url(id)
