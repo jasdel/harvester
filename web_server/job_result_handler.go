@@ -13,13 +13,14 @@ import (
 // Returns an error if the job isn't found, or invalid input. If the job
 // exists its status will be returned. A result mime content type filter can
 // also be provided as the 'mime' query parameter. The parameter acts as a prefix
-// filter when returning results of a job
+// filter when returning results of a job. If the job does not exists a 404 status
+// code and message will be returned.
 //
 // e.g:
-// curl -X GET "http://localhost:8080/results/1234"
+// curl -X GET "http://localhost:8080/results/1234?mime=image"
 //
 // Response:
-//	- Success: {<domain>: [ {Mime: <mime>, URL: <urls>} ]}
+//	- Success: {<domain>: [ <url>, ... ], ...}
 //	- Failure: {code: <code>, message: <message>}
 type JobResultHandler struct {
 	sc *storage.Client

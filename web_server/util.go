@@ -8,9 +8,14 @@ import (
 	"strconv"
 )
 
+// Defines the error response message to be transmitted to the client
+// in the case of an error
 type ErrorRsp struct {
+	// Simple code generically describing the problem.
 	Code string `json:"code"`
-	Msg  string `json:"message"`
+
+	// Message providing detailed information about the error.
+	Msg string `json:"message"`
 }
 
 // Encodes the response as a JSON object, and writes it back to the client.

@@ -15,8 +15,7 @@ func TestWriteJSON(t *testing.T) {
 	err := writeJSON(w, []string{"a", "b", "c"}, http.StatusRequestURITooLong)
 	require.Nil(t, err, "No Error should be received")
 	assert.Equal(t, http.StatusRequestURITooLong, w.Code, "Code should be set")
-	assert.Equal(t, "[\"a\",\"b\",\"c\"]\n", w.Body.String(), "Body should be json encoded")
-
+	assert.Equal(t, "[\"a\",\"b\",\"c\"]\n", w.Body.String(), "Body should be JSON encoded")
 }
 
 func TestJobIdFromString(t *testing.T) {

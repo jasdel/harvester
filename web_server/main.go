@@ -17,10 +17,10 @@ import (
 //		- Schedule Job. Body is newline separated list of URls to scheduled to be crawled.
 //
 // GET: /status/:jobId
-//		- Get the status of a previously scheduled job.
+//		- Get the status of an already scheduled job.
 //
 // GET: /result/:jobId
-//		- Get the result of a previously scheduled job
+//		- Get the result of an already scheduled job
 //
 func main() {
 	cfgFilename := flag.String("config", "config.json", "The web server configuration file.")
@@ -57,10 +57,17 @@ func main() {
 	}
 }
 
+// Provides the web server's configuration information. For connecting to
+// Queues, storage, and other runtime settings.
 type Config struct {
-	StorageConfig  storage.ClientConfig `json:"storage"`
-	URLQueueConfig queue.QueueConfig    `json:"urlQueue"`
-	HTTPAddr       string               `json:"httpAddr"`
+	// Storage connection configuration
+	StorageConfig storage.ClientConfig `json:"storage"`
+
+	// URL queue for publishing scheduled job URLs to the foreman
+	URLQueueConfig queue.QueueConfig `json:"urlQueue"`
+
+	// HTTP address to service content from
+	HTTPAddr string `json:"httpAddr"`
 }
 
 // Loads the configuration file from disk in as a JSON blob.

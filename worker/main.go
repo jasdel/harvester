@@ -55,14 +55,30 @@ func main() {
 	}
 }
 
-// TODO document these fields
+// Provides the Foreman's configuration information. For connecting to
+// Queues, storage, and other runtime settings.
 type Config struct {
-	StorageConfig   storage.ClientConfig `json:"storage"`
-	WorkQueueConfig queue.QueueConfig    `json:"workQueue"`
-	URLQueueConfig  queue.QueueConfig    `json:"urlQueue"`
-	MaxLevel        int                  `json:"maxLevel"`
-	WorkDelayStr    string               `json:"workDelay"`
-	WorkDelay       time.Duration        `json:"-"`
+	StorageConfig storage.ClientConfig `json:"storage"`
+
+	// Queue to receive work from from the foreman(s). The URLQueueItems
+	// will be pulled off of this queue and crawled.
+	WorkQueueConfig queue.QueueConfig `json:"workQueue"`
+
+	// Queue to publish URLs to be crawled which were found when scrapping
+	// a previously queued work URLQueueItem
+	URLQueueConfig queue.QueueConfig `json:"urlQueue"`
+
+	// the maximum level the crawling should be allowed to travel
+	MaxLevel int `json:"maxLevel"`
+
+	// Delay before requesting additional work. Indented to prevent
+	// flooding domain's with too many requests back to back.
+	// time.Duration string formated value.  e.g: 1m23s for 1 minute and 23 seconds
+	WorkDelayStr string `json:"workDelay"`
+
+	// The WorkDelayStr will be parsed, and its value placed into the WorkDelay field.
+	// Used to provide delay between accepting more work.
+	WorkDelay time.Duration `json:"-"`
 }
 
 // Loads the configuration file from disk in as a JSON blob.

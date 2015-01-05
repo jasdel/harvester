@@ -27,13 +27,14 @@ type jobStatusMsg struct {
 
 // Handles the request checking on the status of a previously scheduled job.
 // Returns an error if the job isn't found, or invalid input. If the job
-// exists its status will be returned
+// exists its status will be returned. If the job does not exists a 404 status
+// code and message will be returned.
 //
 // e.g:
 // curl -X GET "http://localhost:8080/status/1234"
 //
 // Response:
-//	- Success: {completed: 2, pending: 3, elapsed: 5m10s}
+//	- Success: {completed: 2, pending: 3, elapsed: 5m10s, urls: { <url>: <complete> } }
 //	- Failure: {code: <code>, message: <message>}
 type JobStatusHandler struct {
 	sc *storage.Client

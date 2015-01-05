@@ -6,9 +6,16 @@ import (
 )
 
 const (
-	// Generic URL pattern for <scheme>://domain/path
-	htmlURLRegexp    = `href="([^"]+)|src="([^"]+)`
-	cssURLRegexp     = `url\(['"](.+?)['"]\)`
+	// Regex for searching an HTML document for URL patterns.
+	// The patterns are limit to just href and src attributes for simplicity.
+	htmlURLRegexp = `href="([^"]+)|src="([^"]+)`
+
+	// CSS URL regex pattern. Matches only the url(...) pattern
+	cssURLRegexp = `url\(['"](.+?)['"]\)`
+
+	// Generic URL pattern for <scheme>://domain/path.  This will
+	// match anything that kind of looks like a URL. via the //... pattern
+	// for auto scheme URLs.
 	genericURLRegexp = `(https?:\/\/[\w.\/=&?:-]+)|(\/\/[\w.\/=&?:-]+)`
 )
 

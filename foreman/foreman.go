@@ -124,7 +124,7 @@ func (f *Foreman) processDescendants(jobIds []common.JobId, item *common.URLQueu
 		}
 	} else {
 		log.Println("Adding descendants to results")
-		urlClient.AddURLsToResults(jobIds, item.ReferId, urlRecs)
+		urlClient.AddURLsToResults(jobIds, item.URLId, urlRecs)
 	}
 
 	return nil

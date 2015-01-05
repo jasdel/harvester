@@ -20,3 +20,28 @@ FROM job_url
 LEFT JOIN url AS url on job_url.url_id = url.id
 WHERE job_url.job_id = 1
 ;
+
+-- Insert with out result
+INSERT INTO url_link (url_id, refer_id)
+	SELECT 3, 4
+	WHERE NOT EXISTS (SELECT 1 FROM url_link WHERE url_id = 3 AND refer_id = 4)
+;
+
+
+-- Insert with result
+WITH s AS (
+    SELECT id, url
+    FROM url
+    WHERE url = 'http://www.google.com'
+), i as (
+    INSERT INTO url (url, mime)
+    SELECT 'http://www.google.com', 'text/css'
+    WHERE NOT EXISTS (SELECT 1 FROM s)
+    RETURNING id
+)
+SELECT id
+from i
+union all
+select id
+from s
+;

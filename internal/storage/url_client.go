@@ -82,7 +82,22 @@ WHERE url_link.refer_id = $1`
 // Adds a new URL to the database returning a URL object for it.
 // If no mime is known us common.DefaultMime in its place.
 func (u *URLClient) Add(url, mime string) (*URL, error) {
-	const queryURLAdd = `INSERT INTO url (url, mime) VALUES ($1, $2) RETURNING id`
+	const queryURLAdd = `
+WITH s AS (
+    SELECT id, url
+    FROM url
+    WHERE url = $1
+), i as (
+    INSERT INTO url (url, mime)
+    SELECT $1, $2
+    WHERE NOT EXISTS (SELECT 1 FROM s)
+    RETURNING id
+)
+SELECT id
+from i
+union all
+select id
+from s`
 
 	var id sql.NullInt64
 	if err := u.client.db.QueryRow(queryURLAdd, url, mime).Scan(&id); err != nil {
@@ -99,9 +114,13 @@ func (u *URLClient) Add(url, mime string) (*URL, error) {
 }
 
 // Attempts to insert a link between a refer and URL into the storage. If the
-// link already exists, or there is an error, an error will be returned.
+// link already exists, the insert statement will be ignored.
 func (u *URLClient) AddLink(urlId, referId common.URLId) error {
-	const queryURLInsertLink = `INSERT INTO url_link (url_id, refer_id) VALUES ($1, $2)`
+	const queryURLInsertLink = `
+INSERT INTO url_link (url_id, refer_id)
+	SELECT $1, $2
+	WHERE NOT EXISTS (SELECT 1 FROM url_link WHERE url_id = $1 AND refer_id = $2)`
+
 	if _, err := u.client.db.Exec(queryURLInsertLink, urlId, referId); err != nil {
 		return err
 	}
@@ -119,9 +138,13 @@ func (u *URLClient) MarkCrawled(urlId common.URLId, mime string) error {
 	return nil
 }
 
-// Adds the URL as pending under a origin URL
+// Adds the URL as pending under a origin URL. If the record already exists the
+// insert statement will be ignored.
 func (u *URLClient) AddPending(urlId, originId common.URLId) error {
-	const queryURLAddPending = `INSERT INTO url_pending (url_id,origin_id) VALUES ($1, $2)`
+	const queryURLAddPending = `
+INSERT INTO url_pending (url_id,origin_id)
+	SELECT $1, $2
+	WHERE NOT EXISTS (SELECT 1 FROM url_pending WHERE url_id = $1 AND origin_id = $2)`
 
 	if _, err := u.client.db.Exec(queryURLAddPending, urlId, originId); err != nil {
 		return err
@@ -154,9 +177,13 @@ func (u *URLClient) HasPending(originId common.URLId) (bool, error) {
 	return pending.Valid && pending.Bool, nil
 }
 
-// Records a new crawled URL into the job results, for a specific jobId
+// Records a new crawled URL into the job results, for a specific jobId. If the result record
+// already exists, the insert statement will be ignored.
 func (u *URLClient) AddResult(jobId common.JobId, urlId, referId common.URLId, mime string) error {
-	const queryURLInsertResult = `INSERT INTO job_result (job_id, url_id, refer_id, mime) VALUES ($1, $2, $3, $4)`
+	const queryURLInsertResult = `
+INSERT INTO job_result (job_id, url_id, refer_id, mime)
+	SELECT $1, $2, $3, $4
+	WHERE NOT EXISTS (SELECT 1 FROM job_result WHERE job_id = $1 AND url_id = $2 AND refer_id = $3)`
 
 	if _, err := u.client.db.Exec(queryURLInsertResult, jobId, urlId, referId, mime); err != nil {
 		return err
