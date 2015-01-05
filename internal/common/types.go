@@ -13,6 +13,7 @@ func (id JobId) String() string {
 	return fmt.Sprintf("%d", id)
 }
 
+// URL Id, used for identifying and searching for URL records
 type URLId int64
 
 // satisfies the stringer interface
@@ -20,6 +21,7 @@ func (id URLId) String() string {
 	return fmt.Sprintf("%d", id)
 }
 
+// Default mime type URL mimes are initialized to.
 const DefaultURLMime = ``
 
 // Invalid job state.  Any job with an id of this should not be processed.
@@ -59,15 +61,12 @@ type URLQueueItem struct {
 	JobId JobId `json:"jobId"`
 
 	// Initial Job URL which spawned the recursive chain of URL items to be queued
-	// Origin   string `json:"origin"`
 	OriginId URLId `json:"originId"`
 
 	// The URL which contained a link to this URL
-	// Refer   string `json:"refer"`
 	ReferId URLId `json:"referId"`
 
 	// The URL to be processed
-	// URL   string `json:"url"`
 	URLId URLId `json:"urlId"`
 
 	// The recursive distance this URL is from the Origin URL
@@ -76,6 +75,6 @@ type URLQueueItem struct {
 	// Flag instructing the processors craw the URL regardless
 	// if it has already been crawled. The force crawl flag should
 	// be passed down to descendants to ensure they are also crawled.
-	// Note: Does not apply to ignored mime types.
+	// Note: Does not apply to skipped mime types.
 	ForceCrawl bool `json:"forceCrawl"`
 }
