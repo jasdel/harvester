@@ -72,6 +72,8 @@ TODO: replace image here:
 	$ sudo docker run --rm -p 24001:5432 --name pg_test eg_postgresql
 	$ psql -h localhost -p 24001 -d docker -U docker --password < setup/db.sql
 
+# Design Decisions #
+--------------------
 
 # Short Comings #
 -----------------
