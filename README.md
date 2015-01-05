@@ -57,7 +57,7 @@ Parts:
 
 	# Retrieve the status of a job
 	$ curl -X GET "http://localhost:8080/status/1" 
-	> {completed: 0, pending: 2, urls: [{"https://www.google.com":false,"http://example.com":false}]}
+	> {completed: 0, pending: 2}
 
 	# Retrieve the results of a job
 	$ curl -X GET "http://localhost:8080/result/1"

@@ -15,21 +15,49 @@ type URLClient struct {
 	client *Client
 }
 
-const DefaultURLMime = ``
+// Requests a URL record by Id.
+// If no URL is found, nil will be returned for the URL
+func (u *URLClient) GetURLById(id common.URLId) (*URL, error) {
+	const queryURLById = `SELECT id,url,mime,crawled_on FROM url WHERE id = $1`
+	return getURLFromRow(u.client.db.QueryRow(queryURLById, id))
 
-// Returns a URL record if it exists for the URL + refer pair
-func (u *URLClient) GetURLWithRefer(url, refer string) (*URL, error) {
-	const queryURLWithRefer = `SELECT id,url,refer,mime,crawled,created_on FROM url WHERE url = $1 AND refer = $2`
+}
 
-	return getURLFromRow(u.client.db.QueryRow(queryURLWithRefer, url, refer))
+// Requests a URL record for the URL by URL string value.
+// If no URL is found, nil will be returned for the URL
+func (u *URLClient) GetURLByURL(url string) (*URL, error) {
+	const queryURLByName = `SELECT id,url,mime,crawled_on FROM url WHERE url = $1`
+	return getURLFromRow(u.client.db.QueryRow(queryURLByName, url))
+}
+
+// Attempts to get a URL if it already exists. If the URL does not
+// exist a new entry will be added, and that URL entry will be returned.
+// The 'mime' value will only be used if the URL needs to be added.
+func (u *URLClient) GetOrAddURLByURL(urlStr, mime string) (*URL, error) {
+	url, err := u.GetURLByURL(urlStr)
+	if err != nil {
+		return nil, err
+	}
+	if url == nil {
+		var err error
+		if url, err = u.Add(urlStr, mime); err != nil {
+			return nil, err
+		}
+	}
+
+	return url, nil
 }
 
 // Returns a list of direct descendants of the passed in URL.  The passed in URL
 // will be the 'refer' value for each of the returned URLs, if there are any.
-func (u *URLClient) GetAllURLsWithRefer(refer string) ([]*URL, error) {
-	const queryAllURLsWithRefer = `SELECT id,url,refer,mime,crawled,created_on FROM url WHERE refer = $1`
+func (u *URLClient) GetAllURLsWithReferById(referId common.URLId) ([]*URL, error) {
+	const queryAllURLsWithRefer = `
+SELECT url.id, url.url, url.mime, url.crawled_on
+FROM url_link
+LEFT JOIN url on url_link.url_id = url.id
+WHERE url_link.refer_id = $1`
 
-	rows, err := u.client.db.Query(queryAllURLsWithRefer, refer)
+	rows, err := u.client.db.Query(queryAllURLsWithRefer, referId)
 	if err != nil {
 		return nil, err
 	}
@@ -41,6 +69,7 @@ func (u *URLClient) GetAllURLsWithRefer(refer string) ([]*URL, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		urls = append(urls, url)
 	}
 	if err := rows.Err(); err != nil {
@@ -50,32 +79,51 @@ func (u *URLClient) GetAllURLsWithRefer(refer string) ([]*URL, error) {
 	return urls, nil
 }
 
-// Adds a URL to the database for a specific URL/refer combination.
-// mime is the content-type of the url
-func (u *URLClient) Add(url, refer, mime string) error {
-	const queryURLAdd = `INSERT INTO url (url, refer, mime) VALUES ($1, $2, $3)`
+// Adds a new URL to the database returning a URL object for it.
+// If no mime is known us common.DefaultMime in its place.
+func (u *URLClient) Add(url, mime string) (*URL, error) {
+	const queryURLAdd = `INSERT INTO url (url, mime) VALUES ($1, $2) RETURNING id`
 
-	if _, err := u.client.db.Exec(queryURLAdd, url, refer, mime); err != nil {
+	var id sql.NullInt64
+	if err := u.client.db.QueryRow(queryURLAdd, url, mime).Scan(&id); err != nil {
+		return nil, err
+	}
+	if !id.Valid {
+		return nil, fmt.Errorf("Insert failed no URL id created")
+	}
+
+	return &URL{
+		Id:   common.URLId(id.Int64),
+		Mime: mime,
+	}, nil
+}
+
+// Attempts to insert a link between a refer and URL into the storage. If the
+// link already exists, or there is an error, an error will be returned.
+func (u *URLClient) AddLink(urlId, referId common.URLId) error {
+	const queryURLInsertLink = `INSERT INTO url_link (url_id, refer_id) VALUES ($1, $2)`
+	if _, err := u.client.db.Exec(queryURLInsertLink, urlId, referId); err != nil {
 		return err
 	}
 	return nil
 }
 
 // Updates the mime content-type of a preexisting URL.
-func (u *URLClient) Update(url, mime string, crawled bool) error {
-	const queryURLUpdateMime = `UPDATE url SET mime = $2, crawled = $3 WHERE url = $1`
+func (u *URLClient) MarkCrawled(urlId common.URLId, mime string) error {
+	const queryURLUpdateMime = `UPDATE url SET mime = $2, crawled_on = $3 WHERE id = $1`
 
-	if _, err := u.client.db.Exec(queryURLUpdateMime, url, mime, crawled); err != nil {
+	crawledOn := time.Now().UTC()
+	if _, err := u.client.db.Exec(queryURLUpdateMime, urlId, mime, crawledOn); err != nil {
 		return err
 	}
 	return nil
 }
 
-// Adds the URL as pending under a origin
-func (u *URLClient) AddPending(url, origin string) error {
-	const queryURLAddPending = `INSERT INTO url_pending (url,origin) VALUES ($1, $2)`
+// Adds the URL as pending under a origin URL
+func (u *URLClient) AddPending(urlId, originId common.URLId) error {
+	const queryURLAddPending = `INSERT INTO url_pending (url_id,origin_id) VALUES ($1, $2)`
 
-	if _, err := u.client.db.Exec(queryURLAddPending, url, origin); err != nil {
+	if _, err := u.client.db.Exec(queryURLAddPending, urlId, originId); err != nil {
 		return err
 	}
 	return nil
@@ -84,30 +132,43 @@ func (u *URLClient) AddPending(url, origin string) error {
 // Deletes a pending record for a URL that no longer needs be crawled. The pending
 // record is a combination of url + origin, where origin is the origin URL the Job was
 // created with.
-func (u *URLClient) DeletePending(url, origin string) error {
-	const queryURLDeletePending = `DELETE FROM url_pending WHERE url = $1 AND origin = $2`
+func (u *URLClient) DeletePending(urlId, originId common.URLId) error {
+	const queryURLDeletePending = `DELETE FROM url_pending WHERE url_id = $1 AND origin_id = $2`
 
-	if _, err := u.client.db.Exec(queryURLDeletePending, url, origin); err != nil {
+	if _, err := u.client.db.Exec(queryURLDeletePending, urlId, originId); err != nil {
 		return err
 	}
 	return nil
 }
 
-// Records a new crawled URL into the job results, for a specific jobId
-func (u *URLClient) AddResult(jobId common.JobId, url, refer, mime string) error {
-	const queryURLInsertResult = `INSERT INTO job_result (url, job_id, refer, mime) VALUES ($1, $2, $3, $4)`
+// Returns true if there are any pending entries for the origin URL provided. The origin
+// field is used for this search.
+func (u *URLClient) HasPending(originId common.URLId) (bool, error) {
+	const queryURLHasPending = `SELECT exists(SELECT 1 FROM url_pending WHERE origin_id = $1)`
 
-	if _, err := u.client.db.Exec(queryURLInsertResult, url, jobId, refer, mime); err != nil {
+	var pending sql.NullBool
+	if err := u.client.db.QueryRow(queryURLHasPending, originId).Scan(&pending); err != nil {
+		return false, err
+	}
+
+	return pending.Valid && pending.Bool, nil
+}
+
+// Records a new crawled URL into the job results, for a specific jobId
+func (u *URLClient) AddResult(jobId common.JobId, urlId, referId common.URLId, mime string) error {
+	const queryURLInsertResult = `INSERT INTO job_result (job_id, url_id, refer_id, mime) VALUES ($1, $2, $3, $4)`
+
+	if _, err := u.client.db.Exec(queryURLInsertResult, jobId, urlId, referId, mime); err != nil {
 		return err
 	}
 	return nil
 }
 
 // Adds a batch of URLs to the job results. Will update the job result for each job Id provided
-func (u *URLClient) AddURLsToResults(jobIds []common.JobId, refer string, urls []*URL) error {
+func (u *URLClient) AddURLsToResults(jobIds []common.JobId, referId common.URLId, urls []*URL) error {
 	for _, jobId := range jobIds {
 		for _, url := range urls {
-			if err := u.AddResult(jobId, url.URL, refer, url.Mime); err != nil {
+			if err := u.AddResult(jobId, url.Id, referId, url.Mime); err != nil {
 				return err
 			}
 		}
@@ -115,34 +176,21 @@ func (u *URLClient) AddURLsToResults(jobIds []common.JobId, refer string, urls [
 	return nil
 }
 
-// Returns true if there are any pending entries for the origin URL provided. The origin
-// field is used for this search.
-func (u *URLClient) HasPending(url string) (bool, error) {
-	const queryURLHasPending = `SELECT exists(SELECT 1 FROM url_pending WHERE origin = $1)`
-
-	var pending sql.NullBool
-	if err := u.client.db.QueryRow(queryURLHasPending, url).Scan(&pending); err != nil {
-		return false, err
-	}
-
-	return pending.Valid && pending.Bool, nil
-}
-
 // Marks a pre-existing job's URL as completed. This means that all descendants have been
 // crawled up to the max level.
-func (u *URLClient) MarkJobURLComplete(url string) error {
-	const queryURLJobURComplete = `UPDATE job_url SET completed_on = $1 WHERE url = $2 AND completed_on IS NULL`
+func (u *URLClient) MarkJobURLComplete(urlId common.URLId) error {
+	const queryURLJobURComplete = `UPDATE job_url SET completed_on = $1 WHERE url_id = $2 AND completed_on IS NULL`
 	curTime := time.Now().UTC()
-	if _, err := u.client.db.Exec(queryURLJobURComplete, curTime, url); err != nil {
+	if _, err := u.client.db.Exec(queryURLJobURComplete, curTime, urlId); err != nil {
 		return err
 	}
 	return nil
 }
 
 // Searches for all JobIds associated with this origin URL.
-func (u *URLClient) GetJobIdsForURL(url string) ([]common.JobId, error) {
-	const queryURLJobURLOrigin = `SELECT job_id FROM job_url WHERE url = $1 AND completed_on IS NULL`
-	rows, err := u.client.db.Query(queryURLJobURLOrigin, url)
+func (u *URLClient) GetJobIdsForURLById(urlId common.URLId) ([]common.JobId, error) {
+	const queryURLJobURLOrigin = `SELECT job_id FROM job_url WHERE url_id = $1 AND completed_on IS NULL`
+	rows, err := u.client.db.Query(queryURLJobURLOrigin, urlId)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +203,7 @@ func (u *URLClient) GetJobIdsForURL(url string) ([]common.JobId, error) {
 			return nil, err
 		}
 		if !id.Valid {
-			return nil, fmt.Errorf("No job id for url", url)
+			return nil, fmt.Errorf("No job id for URL", urlId)
 		}
 		jobIds = append(jobIds, common.JobId(id.Int64))
 	}
@@ -169,9 +217,9 @@ func (u *URLClient) GetJobIdsForURL(url string) ([]common.JobId, error) {
 // Checks if a URL has any pending entries in the job URL pending table.
 // If there are no longer any entries, All URLs associated with a jobs, not yet completed
 // will be marked as completed.
-func (u *URLClient) UpdateJobURLIfComplete(url string) (bool, error) {
-	if pending, _ := u.HasPending(url); !pending {
-		if err := u.MarkJobURLComplete(url); err != nil {
+func (u *URLClient) UpdateJobURLIfComplete(urlId common.URLId) (bool, error) {
+	if pending, _ := u.HasPending(urlId); !pending {
+		if err := u.MarkJobURLComplete(urlId); err != nil {
 			return false, err
 		} else {
 			return true, nil
@@ -180,20 +228,18 @@ func (u *URLClient) UpdateJobURLIfComplete(url string) (bool, error) {
 	return false, nil
 }
 
-// Extracts the URL from a QueryRow row.
+// Extracts the URL from a QueryRow row. If no URL is found, nil will be returned for the URL
 // Expects the query columns to be the following order:
-//		id, url, refer, mime, crawled, created_on
+//		id, url, mime, crawled_on
 func getURLFromRow(row *sql.Row) (*URL, error) {
 	var (
 		id        sql.NullInt64
 		url       sql.NullString
-		refer     sql.NullString
 		mime      sql.NullString
-		crawled   sql.NullBool
-		createdOn pq.NullTime
+		crawledOn pq.NullTime
 	)
 
-	if err := row.Scan(&id, &url, &refer, &mime, &crawled, &createdOn); err != nil {
+	if err := row.Scan(&id, &url, &mime, &crawledOn); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -205,29 +251,26 @@ func getURLFromRow(row *sql.Row) (*URL, error) {
 	}
 
 	return &URL{
-		Id:        id.Int64,
+		Id:        common.URLId(id.Int64),
 		URL:       url.String,
-		Refer:     refer.String,
 		Mime:      mime.String,
-		Crawled:   crawled.Bool,
-		CreatedOn: createdOn.Time,
+		Crawled:   crawledOn.Valid,
+		CrawledOn: crawledOn.Time,
 	}, nil
 }
 
-// Extracts the URL fields from a Query rows.
+// Extracts the URL fields from a Query rows. If no URL is found, nil will be returned for the URL
 // Expects the query columns to be the following order:
-//		id, url, refer, mime, crawled, created_on
+//		id, url, mime, crawled_on
 func getURLFromRows(rows *sql.Rows) (*URL, error) {
 	var (
 		id        sql.NullInt64
 		url       sql.NullString
-		refer     sql.NullString
 		mime      sql.NullString
-		crawled   sql.NullBool
-		createdOn pq.NullTime
+		crawledOn pq.NullTime
 	)
 
-	if err := rows.Scan(&id, &url, &refer, &mime, &crawled, &createdOn); err != nil {
+	if err := rows.Scan(&id, &url, &mime, &crawledOn); err != nil {
 		return nil, err
 	}
 
@@ -236,11 +279,10 @@ func getURLFromRows(rows *sql.Rows) (*URL, error) {
 	}
 
 	return &URL{
-		Id:        id.Int64,
+		Id:        common.URLId(id.Int64),
 		URL:       url.String,
-		Refer:     refer.String,
 		Mime:      mime.String,
-		Crawled:   crawled.Bool,
-		CreatedOn: createdOn.Time,
+		Crawled:   crawledOn.Valid,
+		CrawledOn: crawledOn.Time,
 	}, nil
 }

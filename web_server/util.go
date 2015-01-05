@@ -28,12 +28,12 @@ func writeJSONError(w http.ResponseWriter, code, msg string, status int) error {
 // Converts a string into a Job ID validating that it is a valid value
 func jobIdFromString(idStr string) (common.JobId, error) {
 	if idStr == "" {
-		return common.InvalidJobId, fmt.Errorf("No jobId provided")
+		return common.InvalidId, fmt.Errorf("No jobId provided")
 	}
 
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		return common.InvalidJobId, fmt.Errorf("Invalid jobId: %s", idStr)
+		return common.InvalidId, fmt.Errorf("Invalid jobId: %s", idStr)
 	}
 
 	return common.JobId(id), nil

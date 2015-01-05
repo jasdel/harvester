@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/jasdel/harvester/internal/common"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
@@ -41,23 +42,19 @@ func NewForeman(workQueuePub queue.Publisher, urlQueuePub queue.Publisher, sc *s
 // descendants will be just added to the job result list.
 func (f *Foreman) ProcessQueueItem(item *common.URLQueueItem) {
 	urlClient := f.sc.URLClient()
-	log.Printf("Foreman: Queue URL: %s, from: %s, origin: %s, level: %d", item.URL, item.Refer, item.Origin, item.Level)
+	log.Printf("Foreman: Queue URL: %s, from: %s, origin: %s, level: %d", item.URLId, item.ReferId, item.OriginId, item.Level)
 
-	url, err := urlClient.GetURLWithRefer(item.URL, item.Refer)
-	if err != nil {
-		log.Println("Failed to get URL", err)
+	urlRec, err := urlClient.GetURLById(item.URLId)
+	if err != nil || urlRec == nil {
+		log.Println("Foreman: Failed to get URL", item.URLId, err)
 		return
 	}
 
-	if url != nil {
-		// If the item URL has already been crawled or a mime type
-		// that can be skipped, use the cache instead.
-		if url.Crawled || common.CanSkipMime(url.Mime) {
-			f.processFromCache(item, url)
-			return
-		}
-	} else {
-		urlClient.Add(item.URL, item.Refer, storage.DefaultURLMime)
+	// If the item URL has already been crawled or a mime type
+	// that can be skipped, use the cache instead.
+	if urlRec.Crawled || common.CanSkipMime(urlRec.Mime) {
+		f.processFromCache(item, urlRec)
+		return
 	}
 
 	f.workQueuePub.Send(item)
@@ -65,89 +62,69 @@ func (f *Foreman) ProcessQueueItem(item *common.URLQueueItem) {
 
 // If an item is being processed from the cache this will determine if that item's descendants
 // should be added the job results, or queued to be crawled them selves.
-func (f *Foreman) processFromCache(item *common.URLQueueItem, url *storage.URL) {
-	log.Println("URL already known and crawled, skipping, checking descendants", item.URL, item.Refer)
+func (f *Foreman) processFromCache(item *common.URLQueueItem, urlRec *storage.URL) {
+	log.Println("Foreman: URL already known and crawled, skipping, checking descendants", item.URLId, item.ReferId)
 	urlClient := f.sc.URLClient()
 
 	defer func() {
 		// Make sure the Job is cleaned up even in if an error happens.
-		if err := urlClient.DeletePending(item.URL, item.Origin); err != nil {
-			log.Println("Failed to delete pending record for", item.URL, item.Origin)
+		if err := urlClient.DeletePending(item.URLId, item.OriginId); err != nil {
+			log.Println("Foreman: Failed to delete pending record for", item.URLId, item.OriginId)
 		}
 
 		// If there are no more pending entries for this origin, all jobs which contain that
 		// origin which are not already complete can be marked as complete.
-		if complete, err := urlClient.UpdateJobURLIfComplete(item.Origin); err != nil {
-			log.Println("Failed to update if Job URL is complete", item.Origin, err)
+		if complete, err := urlClient.UpdateJobURLIfComplete(item.OriginId); err != nil {
+			log.Println("Foreman: Failed to update if Job URL is complete", item.OriginId, err)
 		} else if complete {
-			log.Println("Marked Job URL as complete", item.Origin)
+			log.Println("Foreman: Marked Job URL as complete", item.OriginId)
 		}
 	}()
+
+	// Get the job Ids which are associated with the origin of this item
+	// so that items can be added to their results
+	jobIds, err := urlClient.GetJobIdsForURLById(item.OriginId)
+	if err != nil {
+		log.Println("Foreman: Failed to get job ids associated with  origin", item.OriginId)
+		return
+	}
 
 	// Only add items to the result if they are greater than the first layer
 	// because the first layer is the URLs that are used to start a job,
 	// so they do not make sense to be inserted into the results without a refer.
 	if item.Level > 0 {
-		if err := f.addToResults(item, url); err != nil {
-			log.Println("Failed to add already crawled item to results", item.URL, err)
-		}
+		urlClient.AddURLsToResults(jobIds, item.ReferId, []*storage.URL{urlRec})
 	}
 
-	if err := f.processDescendants(item); err != nil {
-		log.Println("Failed to process known queued item's descendants", item.URL, err)
+	if err := f.processDescendants(jobIds, item); err != nil {
+		log.Println("Foreman: Failed to process known queued item's descendants", item.URLId, err)
+		return
 	}
-}
-
-// Adds the item to all Jobs associated with the item's origin results
-func (f *Foreman) addToResults(item *common.URLQueueItem, knownURL *storage.URL) error {
-	urlClient := f.sc.URLClient()
-
-	jobIdsForOrigin, err := urlClient.GetJobIdsForURL(item.Origin)
-	if err != nil {
-		return err
-	}
-	for _, id := range jobIdsForOrigin {
-		if err := urlClient.AddResult(id, item.URL, item.Refer, knownURL.Mime); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // Processes descendants of a URL which is both known and already crawled.
 // The descendants will be either added to the urlQueue if the maxLevel hasn't
 // been reached yet, or will be just added as results to
-func (f *Foreman) processDescendants(item *common.URLQueueItem) error {
+func (f *Foreman) processDescendants(jobIds []common.JobId, item *common.URLQueueItem) error {
 	urlClient := f.sc.URLClient()
 
 	// Get all URLs where this item is a refer to, so that they can be queued
 	// for crawling.
-	urls, err := urlClient.GetAllURLsWithRefer(item.URL)
+	urlRecs, err := urlClient.GetAllURLsWithReferById(item.URLId)
 	if err != nil {
-		log.Println("Failed to get URL descendants of", item.URL, err)
-		return err
+		return fmt.Errorf("Failed to get URL descendants of", item.URLId, err)
 	}
 
 	// Get all URLs where this URL is the refer, and enqueue them. But if the
 	// level would exceed the max, just add the descendants to the results.
 	if item.Level+1 < f.maxLevel {
-		log.Println("enqueuing descendants")
-		if err := f.enqueueURLs(item, urls); err != nil {
-			log.Println("Failed to enqueue URLs", err)
-			return err
+		log.Println("enqueue descendants")
+		if err := f.enqueueURLs(item, urlRecs); err != nil {
+			return fmt.Errorf("Failed to enqueue URLs", err)
 		}
 	} else {
 		log.Println("Adding descendants to results")
-		// Since the URLs won't be enqueued
-		jobIds, err := urlClient.GetJobIdsForURL(item.Origin)
-		if err != nil {
-			log.Println("Failed to get associated JobIds", item.Origin, err)
-			return err
-		}
-		if err := urlClient.AddURLsToResults(jobIds, item.URL, urls); err != nil {
-			log.Println("Failed to add Job URL results", err)
-			return err
-		}
+		urlClient.AddURLsToResults(jobIds, item.ReferId, urlRecs)
 	}
 
 	return nil
@@ -159,19 +136,13 @@ func (f *Foreman) enqueueURLs(refer *common.URLQueueItem, urls []*storage.URL) e
 	urlClient := f.sc.URLClient()
 
 	for _, u := range urls {
-		// if common.CanSkipMime(u.Mime) {
-		// 	// If the URL is a type that can be skipped and doesn't need to be
-		// 	// crawled,
-		// 	continue
-		// }
-
 		q := &common.URLQueueItem{
-			Origin: refer.Origin,
-			Refer:  refer.URL,
-			URL:    u.URL,
-			Level:  refer.Level + 1,
+			OriginId: refer.OriginId,
+			ReferId:  refer.URLId,
+			URLId:    u.Id,
+			Level:    refer.Level + 1,
 		}
-		if err := urlClient.AddPending(u.URL, q.Origin); err != nil {
+		if err := urlClient.AddPending(u.Id, q.OriginId); err != nil {
 			return err
 		}
 

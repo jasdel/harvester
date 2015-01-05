@@ -9,7 +9,7 @@ import (
 // that the URL was found on.
 type URL struct {
 	// ID (primary key) of this entry
-	Id int64
+	Id common.URLId
 
 	// This URL the record is for
 	URL string
@@ -22,11 +22,12 @@ type URL struct {
 
 	// If the URL has been crawled the Crawled flag
 	// will be true, This includes if it was crawled
-	// but found no descendants.
+	// but found no descendants. The crawledOn field
+	// is only valid if this field is true
 	Crawled bool
 
 	// The time stamp the URL entry was created.
-	CreatedOn time.Time
+	CrawledOn time.Time
 }
 
 // Job Entry for the 'job' record. The Job also includes the
@@ -47,8 +48,8 @@ type Job struct {
 // of completed vs pending, and total elapsed time.
 func (j *Job) Status() *common.JobStatus {
 	status := &common.JobStatus{Id: j.Id}
-	status.URLs = make(map[string]bool)
 	var compTime time.Time
+	status.URLs = make(map[string]bool)
 	for _, u := range j.URLs {
 		if u.Completed {
 			status.Completed++
@@ -73,6 +74,9 @@ func (j *Job) Status() *common.JobStatus {
 // be valid if the 'Completed' flag is true.
 type JobURL struct {
 	// Job URL that was requested
+	URLId common.URLId
+
+	// URL for this job item
 	URL string
 
 	// If this Job URL has been completely crawled

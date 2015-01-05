@@ -20,7 +20,8 @@ type jobStatusMsg struct {
 	// The amount of time that the Job has been processing for.
 	Elapsed string `json:"elapsed"`
 
-	// Map of url:status for each URL a job was created for.
+	// Mapping of individual URL status.  A true for a URL means that
+	// it has been processed, and only the false, URLs are pending.
 	URLs map[string]bool `json:"urls"`
 }
 
@@ -63,8 +64,8 @@ func (h *JobStatusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, jobStatusMsg{
 		Completed: status.Completed,
 		Pending:   status.Pending,
-		Elapsed:   status.Elapsed.String(),
 		URLs:      status.URLs,
+		Elapsed:   status.Elapsed.String(),
 	}, http.StatusOK)
 }
 

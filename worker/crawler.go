@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/jasdel/harvester/internal/common"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
@@ -26,41 +27,50 @@ func NewCrawler(urlQueuePub queue.Publisher, sc *storage.Client, maxLevel int) *
 func (c *Crawler) Crawl(item *common.URLQueueItem) {
 	startedAt := time.Now()
 	urlClient := c.sc.URLClient()
+
 	defer func() {
 		// Make sure the Job is cleaned up even in if an error happens.
-		if err := urlClient.DeletePending(item.URL, item.Origin); err != nil {
-			log.Println("crawl: Failed to delete pending record for", item.URL, item.Origin)
+		if err := urlClient.DeletePending(item.URLId, item.OriginId); err != nil {
+			log.Println("crawl: Failed to delete pending record for", item.URLId, item.OriginId)
 		}
+		log.Println("crawl: Finished crawling of", item.URLId, item.Level, "duration", time.Now().Sub(startedAt).String())
 
 		// If there are no more pending entries for this origin, all jobs which contain that
 		// origin which are not already complete can be marked as complete.
-		if complete, err := urlClient.UpdateJobURLIfComplete(item.Origin); err != nil {
-			log.Println("crawl: Failed to update if Job URL is complete", item.Origin, err)
+		if complete, err := urlClient.UpdateJobURLIfComplete(item.OriginId); err != nil {
+			log.Println("crawl: Failed to update if Job URL is complete", item.OriginId, err)
 		} else if complete {
-			log.Println("crawl: Marked Job URL as complete", item.Origin)
+			log.Println("crawl: Marked Job URL as complete", item.OriginId)
 		}
 
-		log.Println("crawl: Finished crawling of", item.URL, item.Level, "duration", time.Now().Sub(startedAt).String())
 	}()
 
-	mime, urls, err := Scrape(item.URL, http.DefaultClient)
-	if err != nil {
-		log.Println("crawl: Failed to request and scrape", item.URL, err)
+	urlRec, err := c.sc.URLClient().GetURLById(item.URLId)
+	if err != nil || urlRec == nil {
+		log.Println("Failed to get URL record for URLId", item.URLId)
 		return
 	}
 
-	log.Println("crawl: Request and Scape complete URL", item.URL, "mime:", mime, "level", item.Level, "descendants", len(urls), "duration", time.Now().Sub(startedAt).String(), "error", err)
+	mime, urls, err := Scrape(urlRec.URL, http.DefaultClient)
+	if err != nil {
+		log.Println("crawl: Failed to request and scrape", item.URLId, urlRec.URL, err)
+		return
+	}
+
+	log.Println("crawl: Request and Scape complete URL", item.URLId, urlRec.URL, "mime:", mime, "level", item.Level, "descendants", len(urls), "duration", time.Now().Sub(startedAt).String(), "error", err)
 
 	// Update mime type for the URL
-	if err := urlClient.Update(item.URL, mime, true); err != nil {
-		log.Println("crawl: failed to add update URL's mime type", item.URL, mime, err)
+	if err := urlClient.MarkCrawled(item.URLId, mime); err != nil {
+		log.Println("crawl: failed to add update URL's mime type", item.URLId, mime, err)
 		return
 	}
+	// Update the local urlRec mime value so don't need to re-query for it.
+	urlRec.Mime = mime
 
 	// Collect the job ids for this origin so their results can be updated
-	jobIdsForOrigin, err := urlClient.GetJobIdsForURL(item.Origin)
+	jobIds, err := urlClient.GetJobIdsForURLById(item.OriginId)
 	if err != nil {
-		log.Println("crawl: origin has no associated jobId", item.Origin)
+		log.Println("crawl: origin has no associated jobId", item.OriginId)
 		return
 	}
 
@@ -68,49 +78,54 @@ func (c *Crawler) Crawl(item *common.URLQueueItem) {
 	// because the first layer is the URLs that are used to start a job,
 	// so they do not make sense to be inserted into the results without a refer.
 	if item.Level > 0 {
-		for _, id := range jobIdsForOrigin {
-			if err := urlClient.AddResult(id, item.URL, item.Refer, mime); err != nil {
-				log.Println("crawl: failed to add result", err, item.Origin, item.Refer, item.URL)
-			}
-		}
+		urlClient.AddURLsToResults(jobIds, item.ReferId, []*storage.URL{urlRec})
 	}
 
+	if err := c.processURLDescendants(jobIds, item, urls); err != nil {
+		log.Println("crawl: failed to process descendants", err)
+	}
+}
+
+func (c *Crawler) processURLDescendants(jobIds []common.JobId, referItem *common.URLQueueItem, urls []string) error {
+	urlClient := c.sc.URLClient()
+
+	// urlRecs := make([]*storage.URL, len(urls))
 	for i := 0; i < len(urls); i++ {
 		u := urls[i]
 
 		kind := common.GuessURLsMime(u)
-		if url, _ := urlClient.GetURLWithRefer(u, item.URL); url == nil {
-			// Only add the URL if it is already not known set the descendant as known
-			// and from this work item's URL, but it will be marked as not-crawled by by default.
-			if err := urlClient.Add(u, item.URL, kind); err != nil {
-				log.Println("crawl: failed to add image to know URLs", item.URL, u, err)
-			}
+		urlRec, err := urlClient.GetOrAddURLByURL(u, kind)
+		if err != nil {
+			return fmt.Errorf("Failed to get or add URL", u)
 		}
-		// For any URL that will not be enqueued, add it as a result instead
-		for _, id := range jobIdsForOrigin {
-			if err := urlClient.AddResult(id, u, item.URL, kind); err != nil {
-				log.Println("crawl: failed to add result", err, item.Origin, item.URL, u)
-			}
-		}
+		// urlRecs[i] = urlRec
 
-		if common.CanSkipMime(kind) {
-			urls = append(urls[:i], urls[i+1:]...)
-			i-- // Step back on to pick up what would of been the item at the next index.
-			continue
-		}
+		// Link the descendant with the refer, Ignore errors about duplicates
+		urlClient.AddLink(urlRec.Id, referItem.URLId)
 
-		if item.Level+1 < c.maxLevel {
+		// Only process the URLs for queue, or skipping, if the max level would
+		// wouldn't be reached yet.
+		if referItem.Level+1 < c.maxLevel {
+			if common.CanSkipMime(kind) {
+				urlClient.AddURLsToResults(jobIds, referItem.URLId, []*storage.URL{urlRec})
+			}
+
 			q := &common.URLQueueItem{
-				Origin: item.Origin,
-				Refer:  item.URL,
-				URL:    u,
-				Level:  item.Level + 1,
+				OriginId: referItem.OriginId,
+				ReferId:  referItem.URLId,
+				URLId:    urlRec.Id,
+				Level:    referItem.Level + 1,
 			}
-			if err := urlClient.AddPending(u, q.Origin); err != nil {
+			if err := urlClient.AddPending(urlRec.Id, q.OriginId); err != nil {
 				log.Println("crawl: failed to add pending URL", err)
 			}
 
 			c.urlQueuePub.Send(q)
+		} else {
+			// For any URL that will not be enqueued, add it as a result instead
+			urlClient.AddURLsToResults(jobIds, referItem.URLId, []*storage.URL{urlRec})
 		}
 	}
+
+	return nil
 }

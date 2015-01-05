@@ -43,25 +43,27 @@ func getJobFromRow(row *sql.Row) (*Job, error) {
 
 // Extracts the Job URLs from a Query of rows.
 // Expects the query columns to be in the order of:
-// 		job_id, url, completed_on
+// 		job_id, url_id, url, completed_on
 func getJobURLFromRows(rows *sql.Rows) (jobURL JobURL, err error) {
 	var (
 		jobId       sql.NullInt64
-		url         sql.NullString
+		urlId       sql.NullInt64
+		urlStr      sql.NullString
 		completedOn pq.NullTime
 	)
 
-	if err = rows.Scan(&jobId, &url, &completedOn); err != nil {
+	if err = rows.Scan(&jobId, &urlId, &urlStr, &completedOn); err != nil {
 		return jobURL, err
 	}
 
-	if !jobId.Valid || !url.Valid {
+	if !jobId.Valid || !urlId.Valid || !urlStr.Valid {
 		return jobURL, fmt.Errorf("Invalid result for job URLs")
 	}
 
 	jobURL = JobURL{
 		JobId:       common.JobId(jobId.Int64),
-		URL:         url.String,
+		URLId:       common.URLId(urlId.Int64),
+		URL:         urlStr.String,
 		CompletedOn: completedOn.Time,
 	}
 	if completedOn.Valid {
@@ -73,9 +75,9 @@ func getJobURLFromRows(rows *sql.Rows) (jobURL JobURL, err error) {
 
 // Create a new job entry with its URLS, returning a pointer to the newly
 // created Job.
-func (j *JobClient) CreateJob(urls []string) (*Job, error) {
+func (j *JobClient) CreateJobFromURLs(urls []string) (*Job, error) {
 	const queryInsertJob = `INSERT INTO job DEFAULT VALUES RETURNING id,created_on`
-	const queryInsertJobURLs = `INSERT INTO job_url (job_id, url) VALUES ($1, $2)`
+	const queryInsertJobURLs = `INSERT INTO job_url (job_id, url_id) VALUES ($1, $2)`
 
 	job, err := getJobFromRow(j.client.db.QueryRow(queryInsertJob))
 	if err != nil {
@@ -87,10 +89,15 @@ func (j *JobClient) CreateJob(urls []string) (*Job, error) {
 
 	job.URLs = make([]JobURL, 0, len(urls))
 	for _, u := range urls {
-		if _, err := j.client.db.Exec(queryInsertJobURLs, job.Id, u); err != nil {
+		url, err := j.client.URLClient().GetOrAddURLByURL(u, common.DefaultURLMime)
+		if err != nil {
 			return nil, err
 		}
-		job.URLs = append(job.URLs, JobURL{JobId: job.Id, URL: u})
+
+		if _, err := j.client.db.Exec(queryInsertJobURLs, job.Id, url.Id); err != nil {
+			return nil, err
+		}
+		job.URLs = append(job.URLs, JobURL{JobId: job.Id, URLId: url.Id})
 	}
 
 	return job, nil
@@ -106,7 +113,11 @@ func (j *JobClient) GetJob(id common.JobId) (*Job, error) {
 		return nil, err
 	}
 
-	const queryJobURLs = `SELECT job_id,url,completed_on FROM job_url WHERE job_id = $1`
+	const queryJobURLs = `
+SELECT job_url.job_id, job_url.url_id, url.url, job_url.completed_on
+FROM job_url
+LEFT JOIN url AS url on job_url.url_id = url.id
+WHERE job_url.job_id = $1`
 	rows, err := j.client.db.Query(queryJobURLs, job.Id)
 	if err != nil {
 		return nil, err
@@ -133,7 +144,12 @@ func (j *JobClient) GetJob(id common.JobId) (*Job, error) {
 // were found from.  Duplicate results under the same refer URL will be removed,
 // and not included in the JobResults returned.
 func (j *JobClient) Result(id common.JobId, mimeFilter string) (common.JobResults, error) {
-	const queryJobResult = `SELECT refer,url,mime FROM job_result WHERE job_id = $1 AND mime like $2`
+	const queryJobResult = `
+SELECT refer.url as refer, url.url as url, url.mime as mime
+FROM job_result
+LEFT JOIN url AS url on job_result.url_id = url.id
+LEFT join url as refer on job_result.refer_id = refer.id
+WHERE job_result.job_id = $1 and url.mime LIKE $2`
 
 	rows, err := j.client.db.Query(queryJobResult, id, mimeFilter+"%")
 	if err != nil {
