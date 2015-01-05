@@ -55,6 +55,9 @@ type JobResults map[string][]string
 // URL task to be queued for processing. This item will be processed by the foreman
 // and sent to workers to crawl.
 type URLQueueItem struct {
+	// Id of job this URL item originated from
+	JobId JobId `json:"jobId"`
+
 	// Initial Job URL which spawned the recursive chain of URL items to be queued
 	// Origin   string `json:"origin"`
 	OriginId URLId `json:"originId"`

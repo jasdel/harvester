@@ -130,48 +130,47 @@ INSERT INTO url_link (url_id, refer_id)
 
 // Updates the mime content-type of a preexisting URL.
 func (u *URLClient) MarkCrawled(urlId common.URLId, mime string) error {
-	const queryURLUpdateMime = `UPDATE url SET mime = $2, crawled_on = $3 WHERE id = $1`
+	const queryURLUpdateMime = `UPDATE url SET mime = $1, crawled_on = $2 WHERE id = $3`
 
 	crawledOn := time.Now().UTC()
-	if _, err := u.client.db.Exec(queryURLUpdateMime, urlId, mime, crawledOn); err != nil {
+	if _, err := u.client.db.Exec(queryURLUpdateMime, mime, crawledOn, urlId); err != nil {
 		return err
 	}
 	return nil
 }
 
-// Adds the URL as pending under a origin URL. If the record already exists the
+// Adds the URL as pending under a origin URL and job Id. If the record already exists the
 // insert statement will be ignored.
-func (u *URLClient) AddPending(urlId, originId common.URLId) error {
+func (u *URLClient) AddPending(jobId common.JobId, urlId, originId common.URLId) error {
 	const queryURLAddPending = `
-INSERT INTO url_pending (url_id,origin_id)
-	SELECT $1, $2
-	WHERE NOT EXISTS (SELECT 1 FROM url_pending WHERE url_id = $1 AND origin_id = $2)`
+INSERT INTO url_pending (job_id, url_id, origin_id)
+	SELECT $1, $2, $3
+	WHERE NOT EXISTS (SELECT 1 FROM url_pending WHERE job_id = $1 AND url_id = $2 AND origin_id = $3)`
 
-	if _, err := u.client.db.Exec(queryURLAddPending, urlId, originId); err != nil {
+	if _, err := u.client.db.Exec(queryURLAddPending, jobId, urlId, originId); err != nil {
 		return err
 	}
 	return nil
 }
 
 // Deletes a pending record for a URL that no longer needs be crawled. The pending
-// record is a combination of url + origin, where origin is the origin URL the Job was
+// record is a combination of job + url + origin, where origin is the origin URL the Job was
 // created with.
-func (u *URLClient) DeletePending(urlId, originId common.URLId) error {
-	const queryURLDeletePending = `DELETE FROM url_pending WHERE url_id = $1 AND origin_id = $2`
+func (u *URLClient) DeletePending(jobId common.JobId, urlId, originId common.URLId) error {
+	const queryURLDeletePending = `DELETE FROM url_pending WHERE job_id = $1 AND url_id = $2 AND origin_id = $3`
 
-	if _, err := u.client.db.Exec(queryURLDeletePending, urlId, originId); err != nil {
+	if _, err := u.client.db.Exec(queryURLDeletePending, jobId, urlId, originId); err != nil {
 		return err
 	}
 	return nil
 }
 
-// Returns true if there are any pending entries for the origin URL provided. The origin
-// field is used for this search.
-func (u *URLClient) HasPending(originId common.URLId) (bool, error) {
-	const queryURLHasPending = `SELECT exists(SELECT 1 FROM url_pending WHERE origin_id = $1)`
+// Returns true if the Origin Job URL is still has pending entries in the pending table.
+func (u *URLClient) HasPending(jobId common.JobId, originId common.URLId) (bool, error) {
+	const queryURLHasPending = `SELECT exists(SELECT 1 FROM url_pending WHERE job_id = $1 AND origin_id = $2)`
 
 	var pending sql.NullBool
-	if err := u.client.db.QueryRow(queryURLHasPending, originId).Scan(&pending); err != nil {
+	if err := u.client.db.QueryRow(queryURLHasPending, jobId, originId).Scan(&pending); err != nil {
 		return false, err
 	}
 
@@ -180,25 +179,23 @@ func (u *URLClient) HasPending(originId common.URLId) (bool, error) {
 
 // Records a new crawled URL into the job results, for a specific jobId. If the result record
 // already exists, the insert statement will be ignored.
-func (u *URLClient) AddResult(jobId common.JobId, urlId, referId common.URLId, mime string) error {
+func (u *URLClient) AddResult(jobId common.JobId, referId, urlId common.URLId) error {
 	const queryURLInsertResult = `
-INSERT INTO job_result (job_id, url_id, refer_id, mime)
-	SELECT $1, $2, $3, $4
-	WHERE NOT EXISTS (SELECT 1 FROM job_result WHERE job_id = $1 AND url_id = $2 AND refer_id = $3)`
+INSERT INTO job_result (job_id, refer_id, url_id)
+	SELECT $1, $2, $3
+	WHERE NOT EXISTS (SELECT 1 FROM job_result WHERE job_id = $1 AND refer_id = $2 AND url_id = $3)`
 
-	if _, err := u.client.db.Exec(queryURLInsertResult, jobId, urlId, referId, mime); err != nil {
+	if _, err := u.client.db.Exec(queryURLInsertResult, jobId, referId, urlId); err != nil {
 		return err
 	}
 	return nil
 }
 
 // Adds a batch of URLs to the job results. Will update the job result for each job Id provided
-func (u *URLClient) AddURLsToResults(jobIds []common.JobId, referId common.URLId, urls []*URL) error {
-	for _, jobId := range jobIds {
-		for _, url := range urls {
-			if err := u.AddResult(jobId, url.Id, referId, url.Mime); err != nil {
-				return err
-			}
+func (u *URLClient) AddURLsToResults(jobId common.JobId, referId common.URLId, urls []*URL) error {
+	for _, url := range urls {
+		if err := u.AddResult(jobId, referId, url.Id); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -206,48 +203,24 @@ func (u *URLClient) AddURLsToResults(jobIds []common.JobId, referId common.URLId
 
 // Marks a pre-existing job's URL as completed. This means that all descendants have been
 // crawled up to the max level.
-func (u *URLClient) MarkJobURLComplete(urlId common.URLId) error {
-	const queryURLJobURComplete = `UPDATE job_url SET completed_on = $1 WHERE url_id = $2 AND completed_on IS NULL`
+func (u *URLClient) MarkJobURLComplete(jobId common.JobId, urlId common.URLId) error {
+	const queryURLJobURComplete = `
+UPDATE job_url SET completed_on = $1
+	WHERE job_id = $2 AND url_id = $3 AND completed_on IS NULL`
+
 	curTime := time.Now().UTC()
-	if _, err := u.client.db.Exec(queryURLJobURComplete, curTime, urlId); err != nil {
+	if _, err := u.client.db.Exec(queryURLJobURComplete, curTime, jobId, urlId); err != nil {
 		return err
 	}
 	return nil
 }
 
-// Searches for all JobIds associated with this origin URL.
-func (u *URLClient) GetJobIdsForURLById(urlId common.URLId) ([]common.JobId, error) {
-	const queryURLJobURLOrigin = `SELECT job_id FROM job_url WHERE url_id = $1 AND completed_on IS NULL`
-	rows, err := u.client.db.Query(queryURLJobURLOrigin, urlId)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	jobIds := []common.JobId{}
-	for rows.Next() {
-		var id sql.NullInt64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		if !id.Valid {
-			return nil, fmt.Errorf("No job id for URL", urlId)
-		}
-		jobIds = append(jobIds, common.JobId(id.Int64))
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return jobIds, nil
-}
-
 // Checks if a URL has any pending entries in the job URL pending table.
-// If there are no longer any entries, All URLs associated with a jobs, not yet completed
+// If there are no longer any entries, The URL associated with this job
 // will be marked as completed.
-func (u *URLClient) UpdateJobURLIfComplete(urlId common.URLId) (bool, error) {
-	if pending, _ := u.HasPending(urlId); !pending {
-		if err := u.MarkJobURLComplete(urlId); err != nil {
+func (u *URLClient) UpdateJobURLIfComplete(jobId common.JobId, urlId common.URLId) (bool, error) {
+	if pending, _ := u.HasPending(jobId, urlId); !pending {
+		if err := u.MarkJobURLComplete(jobId, urlId); err != nil {
 			return false, err
 		} else {
 			return true, nil

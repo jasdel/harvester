@@ -8,6 +8,13 @@ CREATE TABLE IF NOT EXISTS url (
 );
 CREATE UNIQUE INDEX url_unique ON url(url);
 
+-- Links a refer URL with a content URL
+CREATE TABLE IF NOT EXISTS url_link (
+    url_id   INT NOT NULL,
+    refer_id INT NOT NULL
+);
+CREATE UNIQUE INDEX url_link_pair ON url_link (url_id, refer_id);
+
 -- Scheduled Job
 CREATE TABLE IF NOT EXISTS job (
     id           serial                   PRIMARY KEY,
@@ -28,23 +35,16 @@ CREATE TABLE IF NOT EXISTS job_result (
     job_id   INT  NOT NULL,
     refer_Id INT  NOT NULL, -- URL which this job URL result was found on
     url_id   INT  NOT NULL, -- URL for this result
-    mime     TEXT DEFAULT '', -- content type this URL result references
+    -- mime     TEXT DEFAULT '', -- content type this URL result references
 
     FOREIGN KEY (refer_id) REFERENCES url(id),
     FOREIGN KEY (url_id)   REFERENCES url(id)
 );
 CREATE UNIQUE INDEX job_result_pair ON job_result(job_id,refer_id,url_id);
 
-
--- Links a refer URL with a content URL
-CREATE TABLE IF NOT EXISTS url_link (
-    url_id   INT NOT NULL,
-    refer_id INT NOT NULL
-);
-CREATE UNIQUE INDEX url_link_pair ON url_link (url_id, refer_id);
-
 -- job URL still pending
 CREATE TABLE IF NOT EXISTS url_pending (
+    job_id    INT NOT NULL, -- Job Id the origin URL started with
 	origin_id INT NOT NULL, -- The Job URL that this URL is a descendant of 
-	url_Id    INT NOT NULL -- URL that is pending being crawled.
+	url_Id    INT NOT NULL  -- URL that is pending being crawled.
 );

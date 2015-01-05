@@ -157,10 +157,16 @@ func (h *JobScheduleHandler) scheduleJob(urls []string, forceCrawl bool) (common
 
 	go func() {
 		for _, u := range job.URLs {
-			if err := h.sc.URLClient().AddPending(u.URLId, u.URLId); err != nil {
+			if err := h.sc.URLClient().AddPending(job.Id, u.URLId, u.URLId); err != nil {
 				log.Println("JobScheduleHandler.scheduleJob: failed to add job URL to pending list", err)
 			}
-			h.urlQueuePub.Send(&common.URLQueueItem{OriginId: u.URLId, URLId: u.URLId, ReferId: common.InvalidId, ForceCrawl: forceCrawl})
+			h.urlQueuePub.Send(&common.URLQueueItem{
+				JobId:      job.Id,
+				OriginId:   u.URLId,
+				URLId:      u.URLId,
+				ReferId:    common.InvalidId,
+				ForceCrawl: forceCrawl,
+			})
 		}
 	}()
 
