@@ -139,11 +139,30 @@ WHERE job_url.job_id = $1`
 	return job, err
 }
 
+// Returns if the Job id matches an existing job.
+func (j *JobClient) JobExists(id common.JobId) (bool, error) {
+	const queryJobExists = `SELECT exists(SELECT 1 FROM job WHERE id = $1)`
+
+	var exists sql.NullBool
+	if err := j.client.db.QueryRow(queryJobExists, id).Scan(&exists); err != nil {
+		return false, err
+	}
+
+	return exists.Valid && exists.Bool, nil
+
+}
+
 // Queries the result URLs for a job by id, and generates the JobResult object.
 // Results will be grouped in list under the refer URL which those result URLs
 // were found from.  Duplicate results under the same refer URL will be removed,
 // and not included in the JobResults returned.
 func (j *JobClient) Result(id common.JobId, mimeFilter string) (common.JobResults, error) {
+	if exists, err := j.JobExists(id); err != nil {
+		return nil, err
+	} else if exists == false {
+		return nil, fmt.Errorf("Job does not exist")
+	}
+
 	const queryJobResult = `
 SELECT refer.url as refer, url.url as url, url.mime as mime
 FROM job_result
