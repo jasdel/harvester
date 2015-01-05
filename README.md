@@ -70,16 +70,19 @@ Parts:
 # Setup #
 ---------
 gnatsd for message queues
-$ go get github.com/apcera/gnatsd
-$ go get github.com/apcera/nats
-$ gnatsd
+	$ go get github.com/apcera/gnatsd
+	$ go get github.com/apcera/nats
+	$ gnatsd
 
-Create postgres container from docker file
-$ sudo docker build -t eg_postgresql ./setup
+Get Docker
+	$ curl -sSL https://get.docker.com/ubuntu/ | sudo sh
+
+Create postgresql container from docker file
+	$ sudo docker build -t eg_postgresql ./setup
 
 Setup and start postgresql
-$ sudo docker run --rm -p 24001:5432 --name pg_test eg_postgresql
-$ psql -h localhost -p 24001 -d docker -U docker --password < setup/db.sql
+	$ sudo docker run --rm -p 24001:5432 --name pg_test eg_postgresql
+	$ psql -h localhost -p 24001 -d docker -U docker --password < setup/db.sql
 
 
 # Notes #

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 )
 
 // Web server for exposing an interface for scheduling jobs, checking their status, and
@@ -51,10 +52,11 @@ func main() {
 	defer sc.Close()
 
 	// Create the HTTP handlers to be able to provide an interface for serving
-	// job schedule, status, and result requests.
-	http.Handle("/", &JobScheduleHandler{urlQueuePub: urlQueuePub, sc: sc})
-	http.Handle("/status/", &JobStatusHandler{sc: sc})
-	http.Handle("/result/", &JobResultHandler{sc: sc})
+	// job schedule, status, and result requests. The Trailing '/' have to be append
+	// because path.Join will strip off the trailing '/'
+	http.Handle(path.Join("/", cfg.HTTPRootPath), &JobScheduleHandler{urlQueuePub: urlQueuePub, sc: sc})
+	http.Handle(path.Join("/", cfg.HTTPRootPath, "/status/")+"/", &JobStatusHandler{sc: sc})
+	http.Handle(path.Join("/", cfg.HTTPRootPath, "/result/")+"/", &JobResultHandler{sc: sc})
 
 	log.Println("Listening on", cfg.HTTPAddr)
 	if err := http.ListenAndServe(cfg.HTTPAddr, nil); err != nil {
@@ -73,6 +75,10 @@ type Config struct {
 
 	// HTTP address to service content from
 	HTTPAddr string `json:"httpAddr"`
+
+	// Root path the HTTP routes should be based of of. Useful when
+	// nesting the service behind a reverse proxy
+	HTTPRootPath string `json:"httpRootPath"`
 }
 
 // Loads the configuration file from disk in as a JSON blob.

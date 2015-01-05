@@ -12,5 +12,6 @@
 		"topic":   "url_queue"
 	},
 
-	"httpAddr": ":8080"
+	"httpAddr": ":8080",
+	"httpRootPath": "/goapps/harvester"
 }
