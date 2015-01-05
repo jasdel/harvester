@@ -17,5 +17,7 @@
 		"topic":   "work_queue"
 	},
 
-	"maxLevel": 2
+	"maxLevel": 2,
+
+	"cacheMaxAge": "24h"
 }

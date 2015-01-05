@@ -94,3 +94,11 @@ $ psql -h localhost -p 24001 -d docker -U docker --password < setup/db.sql
 	- http://bjorngylling.com/2011-04-13/postgres-listen-notify-with-node-js.html
 - http://www.postgresql.org/docs/9.2/static/plpgsql-trigger.html
 	- triggers (39-4)
+
+
+# Short Comings #
+-----------------
+- If two or more jobs are scheduled with the same URLs there is a race condition
+  where the results of one of them will be marked complete, but the pending URLS
+  are still in the queue and will be crawled. Its possible for one job's results
+  to not have all URLs that it should.

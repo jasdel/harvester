@@ -125,10 +125,11 @@ func (c *Crawler) processURLDescendants(jobIds []common.JobId, referItem *common
 			}
 
 			q := &common.URLQueueItem{
-				OriginId: referItem.OriginId,
-				ReferId:  referItem.URLId,
-				URLId:    urlRec.Id,
-				Level:    referItem.Level + 1,
+				OriginId:   referItem.OriginId,
+				ReferId:    referItem.URLId,
+				URLId:      urlRec.Id,
+				Level:      referItem.Level + 1,
+				ForceCrawl: referItem.ForceCrawl,
 			}
 			if err := urlClient.AddPending(urlRec.Id, q.OriginId); err != nil {
 				log.Println("crawl: failed to add pending URL", err)

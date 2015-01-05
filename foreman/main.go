@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
 	"log"
 	"os"
+	"time"
 )
 
 // Foreman is an intermediate Queue filter which filters out URLs which have previously
@@ -67,7 +69,7 @@ func main() {
 	}
 	defer sc.Close()
 
-	foreman := NewForeman(workQueuePub, urlQueuePub, sc, cfg.MaxLevel)
+	foreman := NewForeman(workQueuePub, urlQueuePub, sc, cfg.MaxLevel, cfg.CacheMaxAge)
 
 	log.Println("Ready: Waiting for URL queue items...")
 	for {
@@ -91,6 +93,15 @@ type Config struct {
 
 	// the maximum level the crawling should be allowed to travel
 	MaxLevel int `json:"maxLevel"`
+
+	// Maximum age a URL can be cached for before it is allowed to
+	// e.g: 1m23s for 1 minute and 23 seconds
+	// See http://golang.org/pkg/time/#ParseDuration for formatting
+	CacheMaxAgeStr string `json:"cacheMaxAge"`
+
+	// The CacheMaxAgeStr will be parsed, and its value placed into the CacheMaxAge field.
+	// Used to determine maximum age to cache a URL for before it is crawled again.
+	CacheMaxAge time.Duration `json:"-"`
 }
 
 // Loads the configuration file from disk in as a JSON blob.
@@ -105,6 +116,15 @@ func LoadConfig(filename string) (Config, error) {
 
 	if err = json.NewDecoder(file).Decode(&cfg); err != nil {
 		return cfg, err
+	}
+
+	if cfg.CacheMaxAgeStr != "" {
+		cfg.CacheMaxAge, err = time.ParseDuration(cfg.CacheMaxAgeStr)
+		if err != nil {
+			return cfg, fmt.Errorf("%s, %s", err.Error(), cfg.CacheMaxAgeStr)
+		} else if cfg.CacheMaxAge < 0 {
+			return cfg, fmt.Errorf("Invalid work delay, must be positive", cfg.CacheMaxAgeStr)
+		}
 	}
 
 	return cfg, nil

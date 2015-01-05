@@ -29,6 +29,13 @@ type jobScheduledMsg struct {
 // http://example.com
 // EOF
 //
+// An optional 'forceCrawl' query parameter can be provided to
+// force crawling of previously crawled URLs. This flag applies
+// to add descendants of each Job URL being scheduled. The parameter
+// doesn't take a value, but if one is provided it will be ignored.
+// If the parameter is present the job's URLs will be crawled,
+// ignoring the cache.
+//
 // Response:
 //	- Success: {jobId: 1234}
 //	- Failure: {code: <code>, message: <message>}
@@ -42,6 +49,11 @@ func (h *JobScheduleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", "POST")
 		http.Error(w, "MethodNotAllowed", http.StatusMethodNotAllowed)
 		return
+	}
+
+	forceCrawl := false
+	if _, ok := r.URL.Query()["forceCrawl"]; ok {
+		forceCrawl = true
 	}
 
 	urls, err := getRequestedJobURLs(r.Body)
@@ -59,7 +71,7 @@ func (h *JobScheduleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create job by sending the URLs to scheduler
-	id, err := h.scheduleJob(urls)
+	id, err := h.scheduleJob(urls, forceCrawl)
 	if err != nil {
 		log.Println("routeScheduleJob request job schedule failed.", err)
 		writeJSONError(w, "DependancyFailure", err.Short(), http.StatusInternalServerError)
@@ -94,6 +106,8 @@ func getRequestedJobURLs(in io.Reader) ([]string, *ErroMsg) {
 		if _, ok := urlMap[u]; ok {
 			continue
 		}
+		urlMap[u] = struct{}{}
+
 		urls = append(urls, u)
 	}
 	if err := scanner.Err(); err != nil {
@@ -131,7 +145,7 @@ func validateJobURL(jobURL string) (string, error) {
 // Requests that a job be created, and the parts of it be scheduled.
 // a job id will be returned if the job was successfully created, and
 // error if there was a failure.
-func (h *JobScheduleHandler) scheduleJob(urls []string) (common.JobId, *ErroMsg) {
+func (h *JobScheduleHandler) scheduleJob(urls []string, forceCrawl bool) (common.JobId, *ErroMsg) {
 	job, err := h.sc.JobClient().CreateJobFromURLs(urls)
 	if err != nil {
 		return common.InvalidId, &ErroMsg{
@@ -146,7 +160,7 @@ func (h *JobScheduleHandler) scheduleJob(urls []string) (common.JobId, *ErroMsg)
 			if err := h.sc.URLClient().AddPending(u.URLId, u.URLId); err != nil {
 				log.Println("JobScheduleHandler.scheduleJob: failed to add job URL to pending list", err)
 			}
-			h.urlQueuePub.Send(&common.URLQueueItem{OriginId: u.URLId, URLId: u.URLId, ReferId: common.InvalidId})
+			h.urlQueuePub.Send(&common.URLQueueItem{OriginId: u.URLId, URLId: u.URLId, ReferId: common.InvalidId, ForceCrawl: forceCrawl})
 		}
 	}()
 

@@ -69,4 +69,10 @@ type URLQueueItem struct {
 
 	// The recursive distance this URL is from the Origin URL
 	Level int `json:"level"`
+
+	// Flag instructing the processors craw the URL regardless
+	// if it has already been crawled. The force crawl flag should
+	// be passed down to descendants to ensure they are also crawled.
+	// Note: Does not apply to ignored mime types.
+	ForceCrawl bool `json:"forceCrawl"`
 }

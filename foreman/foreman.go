@@ -6,6 +6,7 @@ import (
 	"github.com/jasdel/harvester/internal/queue"
 	"github.com/jasdel/harvester/internal/storage"
 	"log"
+	"time"
 )
 
 // Provides filtering of the items before they are forwarded on to the worker queue.
@@ -23,16 +24,20 @@ type Foreman struct {
 	// Maximum level already crawled items are allowed to have their descendants
 	// queued.
 	maxLevel int
+
+	// Maximum age a cached URL can be before it can be crawled again.
+	cacheMaxAge time.Duration
 }
 
 // Creates a new instance of the foreman and returns it.  The foreman's methods
 // are safe to be called across multiple go routines.
-func NewForeman(workQueuePub queue.Publisher, urlQueuePub queue.Publisher, sc *storage.Client, maxLevel int) *Foreman {
+func NewForeman(workQueuePub queue.Publisher, urlQueuePub queue.Publisher, sc *storage.Client, maxLevel int, cacheMaxAge time.Duration) *Foreman {
 	return &Foreman{
 		workQueuePub: workQueuePub,
 		urlQueuePub:  urlQueuePub,
 		sc:           sc,
 		maxLevel:     maxLevel,
+		cacheMaxAge:  cacheMaxAge,
 	}
 }
 
@@ -52,7 +57,8 @@ func (f *Foreman) ProcessQueueItem(item *common.URLQueueItem) {
 
 	// If the item URL has already been crawled or a mime type
 	// that can be skipped, use the cache instead.
-	if urlRec.Crawled || common.CanSkipMime(urlRec.Mime) {
+	now := time.Now().UTC()
+	if (urlRec.Crawled && now.Sub(urlRec.CrawledOn) < f.cacheMaxAge && !item.ForceCrawl) || common.CanSkipMime(urlRec.Mime) {
 		f.processFromCache(item, urlRec)
 		return
 	}
@@ -63,7 +69,7 @@ func (f *Foreman) ProcessQueueItem(item *common.URLQueueItem) {
 // If an item is being processed from the cache this will determine if that item's descendants
 // should be added the job results, or queued to be crawled them selves.
 func (f *Foreman) processFromCache(item *common.URLQueueItem, urlRec *storage.URL) {
-	log.Println("Foreman: URL already known and crawled, skipping, checking descendants", item.URLId, item.ReferId)
+	log.Println("Foreman: Skipping checking descendants from cache.", item.URLId, item.ReferId, urlRec.Mime)
 	urlClient := f.sc.URLClient()
 
 	defer func() {
@@ -137,10 +143,11 @@ func (f *Foreman) enqueueURLs(refer *common.URLQueueItem, urls []*storage.URL) e
 
 	for _, u := range urls {
 		q := &common.URLQueueItem{
-			OriginId: refer.OriginId,
-			ReferId:  refer.URLId,
-			URLId:    u.Id,
-			Level:    refer.Level + 1,
+			OriginId:   refer.OriginId,
+			ReferId:    refer.URLId,
+			URLId:      u.Id,
+			Level:      refer.Level + 1,
+			ForceCrawl: refer.ForceCrawl,
 		}
 		if err := urlClient.AddPending(u.Id, q.OriginId); err != nil {
 			return err

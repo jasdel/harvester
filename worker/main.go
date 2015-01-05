@@ -87,7 +87,9 @@ type Config struct {
 
 	// Delay before requesting additional work. Indented to prevent
 	// flooding domain's with too many requests back to back.
-	// time.Duration string formated value.  e.g: 1m23s for 1 minute and 23 seconds
+	// time.Duration string formated value.
+	// e.g: 1m23s for 1 minute and 23 seconds
+	// See http://golang.org/pkg/time/#ParseDuration for formatting
 	WorkDelayStr string `json:"workDelay"`
 
 	// The WorkDelayStr will be parsed, and its value placed into the WorkDelay field.
