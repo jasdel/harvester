@@ -61,8 +61,8 @@ func main() {
 	// job schedule, status, and result requests. The Trailing '/' have to be append
 	// because path.Join will strip off the trailing '/'
 	http.Handle(path.Join("/", cfg.HTTPRootPath), &JobScheduleHandler{urlQueuePub: urlQueuePub, sc: sc})
-	http.Handle(path.Join("/", cfg.HTTPRootPath, "/status/")+"/", &JobStatusHandler{sc: sc})
-	http.Handle(path.Join("/", cfg.HTTPRootPath, "/result/")+"/", &JobResultHandler{sc: sc})
+	http.Handle(path.Join("/", cfg.HTTPRootPath, "status")+"/", &JobStatusHandler{sc: sc})
+	http.Handle(path.Join("/", cfg.HTTPRootPath, "result")+"/", &JobResultHandler{sc: sc})
 
 	log.Println("Listening on", cfg.HTTPAddr)
 	if err := http.ListenAndServe(cfg.HTTPAddr, nil); err != nil {
