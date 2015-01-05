@@ -5,29 +5,29 @@ accept requests for URLs to be crawled. The URLs are scheduled into a queue, and
 in the order they are received.
 
 There are three main parts that make up the service
-* Web Service (web_server): Receives requests for jobs, and schedules them with the queue service
-* Queue service (foreman): Receives URLs to be crawled and schedules them after filtering against the services URL cache
-* Worker service (worker): Receives URLs and crawls them. All URLs encountered are sent back to the queue service to be queued up.
+- Web Service (web_server): Receives requests for jobs, and schedules them with the queue service
+- Queue service (foreman): Receives URLs to be crawled and schedules them after filtering against the services URL cache
+- Worker service (worker): Receives URLs and crawls them. All URLs encountered are sent back to the queue service to be queued up.
 
 Each can be layer can be scaled vertically independently of each other. A Postgres database provides the persistent storage for the service, and will be the bottle neck for raw through put. Gnatsd NATS service provides the message queue functionality between the services. With Harvester's architecture the three layers could be split into clusters with multiple gnatsd service instances feeding the layers.
 
 TODO: replace image here:
-* Reverse Proxy (e.g: nginx) provides the multiplexing between Web server instances
-* Web server serves incoming requests to schedule jobs, check status, or receive results
-** If the request is for status or results the web server only needs to talk to the database
-** If a job schedule request is received, the url will be packaged and sent to the queue service
-* NATS URL Queue
-** gnatsd provides the message queue transport between web server and queue service
-** NATS queue Receivers are configured so only a single service instance will pull an item off of a queue.
-* Queue service pulls a URL off of the queue, check if it is already cached, and if not send the item to the worker queue. If the item is cache the worker won't need to process it, and its direct descendants can be queued up instead.
-* NATS Worker queue
-* Worker instances pull items from the worker queue, crawls them, and adds their results to the Job result list. Nested URLs are then queued up to be crawled recursively if the max depth from the origin hasn't been reached yet.
+- Reverse Proxy (e.g: nginx) provides the multiplexing between Web server instances
+- Web server serves incoming requests to schedule jobs, check status, or receive results
+  - If the request is for status or results the web server only needs to talk to the database
+  - If a job schedule request is received, the url will be packaged and sent to the queue service
+- NATS URL Queue
+  - gnatsd provides the message queue transport between web server and queue service
+  - NATS queue Receivers are configured so only a single service instance will pull an item off of a queue.
+-  Queue service pulls a URL off of the queue, check if it is already cached, and if not send the item to the worker queue. If the item is cache the worker won't need to process it, and its direct descendants can be queued up instead.
+- NATS Worker queue
+- Worker instances pull items from the worker queue, crawls them, and adds their results to the Job result list. Nested URLs are then queued up to be crawled recursively if the max depth from the origin hasn't been reached yet.
 
 # Dependencies #
 ----------------
-* testify: Simple assert/require test syntax sugar
-* postgresql w/ go bindings: persistent storage.
-* gnatsd w/ go bindings: message queue between web server => queue server <=> worker
+- testify: Simple assert/require test syntax sugar
+- postgresql w/ go bindings: persistent storage.
+- gnatsd w/ go bindings: message queue between web server => queue server <=> worker
 
 
 # Usage #
