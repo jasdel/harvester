@@ -30,11 +30,17 @@ import (
 //
 func main() {
 	cfgFilename := flag.String("config", "config.json", "The web server configuration file.")
+	hostAddr := flag.String("addr", "", "Host address to override config file")
 	flag.Parse()
 
 	cfg, err := LoadConfig(*cfgFilename)
 	if err != nil {
 		log.Fatalln(err)
+	}
+
+	// Allow the host address to be overridden via command line, for multiple instances
+	if *hostAddr != "" {
+		cfg.HTTPAddr = *hostAddr
 	}
 
 	// Initialize the queue for publishing scheduled Job URLs
