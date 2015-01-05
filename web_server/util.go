@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/jasdel/harvester/internal/common"
@@ -20,9 +21,13 @@ type ErrorRsp struct {
 
 // Encodes the response as a JSON object, and writes it back to the client.
 func writeJSON(w http.ResponseWriter, data interface{}, status int) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	e := json.NewEncoder(w)
-	return e.Encode(data)
+
+	buf, err := json.MarshalIndent(data, "", "  ")
+	buf = append(buf, []byte("\n")...)
+	_, err = bytes.NewBuffer(buf).WriteTo(w)
+	return err
 }
 
 // Encodes an error message as a JSON object, and writes it back to the client

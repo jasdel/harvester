@@ -77,6 +77,7 @@ TODO: replace image here:
 
 # Short Comings #
 -----------------
+- Web Server does not cache results of completed jobs. Each request for results requires the results to be extracted out of the db.  An improvement would be to cache the result to file, and have the web server's reverse proxy (nginx) service the static content instead.An alternative to storing the result to disk would be to keep the previous X results in memory.
 
 # Possible Improvements #
 -------------------------
