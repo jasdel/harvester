@@ -41,15 +41,15 @@ Worker Pulls URLQueueItem from queue
 TODO:
 +|-> Add checking if URL already is known, and don't scan it <= done via crawled flag
 +|-> add checking to mark jobs as completed
--|-> Cleanup/add documentation
++|-> Cleanup/add documentation
 	+|-> crawler needs to be split into testable units
 	+|-> add tests for web server logic, util and getRequestedJobURLs
 |-> Write up documentation
 	|-> design decisions, shortcomings, possible improvements,
 	|-> make sure the architecture and code is clearly documented
-|-> Upload to github
-|-> publish dock on a online doc page
-|-> Setup server running on jasdel w/ 2 instances of each layer.
++|-> Upload to github
++|-> publish dock on a online doc page
++|-> Setup server running on jasdel w/ 2 instances of each layer.
 
 Documentation:
 |-> DB relation ship graph
