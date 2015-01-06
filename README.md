@@ -93,6 +93,7 @@ There are three main parts that make up the harvester service.
 Each layer can be scaled independently of the others. gnatsd NATS service provides the message queue functionality between the service parts. With Harvester's architecture, the three layers could be split into clusters with multiple gnatsd service instances feeding the layers. A Postgreql database provides the persistent storage and state for the service. The database will be the bottle neck for raw throughput.
 
 ![Alt text](https://rawgit.com/jasdel/harvester/master/images/HarvesterDB.svg "Database table architecture")
+
 The database tables are split into two main groups. URL and Job.
 
 The URL group contains the actual URL value via the url table. All links between URLs with the url_link table. Both of these tables enforce unique indexes to prevent duplicate entries. Initially duplicate entries was a hurdle I was having difficulty working around, until I learned more robust SQL queries for inserting into the database which were fault tolerant and ignored the insert if the unique index already existed.
