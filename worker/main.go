@@ -26,9 +26,10 @@ import (
 // crawled, or added to the origin Job URL's results.
 //
 func main() {
+	// Configuration file containing all basic configuration for a server instance to run
 	cfgFilename := flag.String("config", "config.json", "The web server configuration file.")
-	flag.Parse()
 
+	flag.Parse()
 	cfg, err := LoadConfig(*cfgFilename)
 	if err != nil {
 		log.Fatalln(err)

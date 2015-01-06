@@ -29,9 +29,10 @@ import (
 // to the Work Queue to be crawled.
 //
 func main() {
+	// Configuration file containing all basic configuration for a server instance to run
 	cfgFilename := flag.String("config", "config.json", "The foreman configuration file.")
-	flag.Parse()
 
+	flag.Parse()
 	cfg, err := LoadConfig(*cfgFilename)
 	if err != nil {
 		log.Fatalln(err)

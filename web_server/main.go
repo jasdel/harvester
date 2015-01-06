@@ -29,18 +29,23 @@ import (
 // Scheduled Job URLs will be sent to the URL Queue to be filtered and later crawled.
 //
 func main() {
+	// Configuration file containing all basic configuration for a server instance to run
 	cfgFilename := flag.String("config", "config.json", "The web server configuration file.")
-	hostAddr := flag.String("addr", "", "Host address to override config file")
-	flag.Parse()
 
+	// Overrides the configuration file's HTTPAddr field. Simplifies the process
+	// of running multiple instances of the web server without needing multiple
+	// configuration files.
+	httpAddr := flag.String("addr", "", "Host address to override config file")
+
+	flag.Parse()
 	cfg, err := LoadConfig(*cfgFilename)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	// Allow the host address to be overridden via command line, for multiple instances
-	if *hostAddr != "" {
-		cfg.HTTPAddr = *hostAddr
+	if *httpAddr != "" {
+		cfg.HTTPAddr = *httpAddr
 	}
 
 	// Initialize the queue for publishing scheduled Job URLs

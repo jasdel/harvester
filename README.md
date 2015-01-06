@@ -4,12 +4,7 @@ Harvester is a distributed web crawler service. It runs on one or multiple hosts
 accept requests for URLs to be crawled. The URLs are scheduled into a queue, and processed
 in the order they are received.
 
-There are three main parts that make up the service
-- Web Service (web_server): Receives requests for jobs, and schedules them with the queue service
-- Queue service (foreman): Receives URLs to be crawled and schedules them after filtering against the services URL cache.
-- Worker service (worker): Receives URLs and crawls them. All URLs encountered are sent back to the queue service to be queued up.
-
-Each layer can be scaled independently of the others. gnatsd NATS service provides the message queue functionality between the service parts. With Harvester's architecture the three layers could be split into clusters with multiple gnatsd service instances feeding the layers. A Postgreql database provides the persistent storage and state for the service. The database will be the bottle neck for raw throughput.
+The service will crawl URLs recursively up till a max depth from the original the job URL. The max depth is a configuration setting in the foreman and worker config.json files.
 
 # Usage #
 ---------
@@ -64,21 +59,39 @@ gnatsd
 **Docker & Postgreql**
 ```
 curl -sSL https://get.docker.com/ubuntu/ | sudo sh
+cd <harvester path>
 sudo docker build -t eg_postgresql ./setup
 ```
 **Start Postgresql and Inject Tables**
 ```
 $ sudo docker run --rm -p 24001:5432 --name pg_test eg_postgresql
+cd <harvester path>
 $ psql -h localhost -p 24001 -d docker -U docker --password < setup/db.sql
 ```
 
-# Design #
-----------
+# Configuration #
+-----------------
+Each part of the harvester service has its own configuration file, and is specified via the "-config <filename>" command line argument parameter.
+
+web_server also takes and additional parameter, "-addr <bind addr>". If set this parameter will override the web_server's configuration file's "httpAddr". This simplifies the process of running multiple instances of the web server without needing multiple configuration files also.
+
+# Design & Architecture #
+-------------------------
+There are three main parts that make up the harvester service.
+- Web Service (web_server): Receives requests for jobs, and schedules them with the queue service.
+- Queue service (foreman): Receives URLs to be crawled and schedules them after filtering against the services URL cache.
+- Worker service (worker): Receives URLs and crawls them. All URLs encountered are sent back to the queue service to be queued up.
+
 ![Alt text](https://rawgit.com/jasdel/harvester/master/images/HarvesterHighLevel.svg "High level architecture")
+
+Each layer can be scaled independently of the others. gnatsd NATS service provides the message queue functionality between the service parts. With Harvester's architecture the three layers could be split into clusters with multiple gnatsd service instances feeding the layers. A Postgreql database provides the persistent storage and state for the service. The database will be the bottle neck for raw throughput.
+
 ![Alt text](https://rawgit.com/jasdel/harvester/master/images/HarvesterDB.svg "Database table architecture")
 
 # Design Decisions #
 --------------------
+
+TODO
 
 **Dependences**:
 - Postgresql: 
@@ -89,10 +102,9 @@ $ psql -h localhost -p 24001 -d docker -U docker --password < setup/db.sql
 -------------------------------
 - Web Server does not cache results of completed jobs. Each request for results requires the results to be extracted out of the db. An improvement would be to cache the result to file, and have the web server's reverse proxy (nginx) service the static content instead. An alternative to storing the result to disk would be to keep the previous X results in memory.
 - Web Server does not limit the number of URLs, or size of content that it processes during a job schedule request. This will allow very large crawl request to have a significant negative impact on the service. A possible solution would be to limit the number of URLs which will be parsed, and only processes up to X bytes from the request body
-- The logic used by the foreman when processing cache URL's and the worker's processing of a crawled URL are very similar. It should be possible to refactor the two so that they share more of the same code base reducing the chance logic bugs producing different results based if a URL is cached or not.
+- The logic used by the foreman when processing cached URLs and the worker's processing of a crawled URLs are very similar. It should be possible to refactor the two so they share the same code. This would reduce the chance of logic bugs producing different results if a URL was cached or not.
 - The way the service parts are configured are via a JSON file. It is simple to use for single instances, but can create complications for multiple instances. A more robust configuration system that pulls in configuration from environment or command line would provide a more easier to configure multiple instances.
-- DB Queries are only tested at runtime by manual testing at the moment. 
-
+- DB Queries are only tested at runtime by manual testing. This allows logic and SQL bugs to go hidden until they are discovered at runtime. Testing these queries through unit tests, and integration tests should be implemented to improve the confidence in that portion of the code.
 - Workers should have some kind of per domain throttling
 - Workers should parse, and respect servers robots.txt file
 - Workers should re-queue URLs which fail with 50x status or connection errors, and re-queue to try again later.
