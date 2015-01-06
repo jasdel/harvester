@@ -113,7 +113,7 @@ The job_pending table is used to temporarily keep track of a job's crawling stat
 - Docker Container for Postgresql: A Docker container for Postgresql simplified starting and stopping the server without polluting my development system with Postgresql's footprint. Using a container also simplified deploying the database, pre-configured to any host.
 - gnatsd Message Queue: gnatsd was chosen because it was dead simple to install, setup, and run. The go bindings were also very simple to understand and use. I briefly looked at zeromq, but zeromq was significantly more complex to use, and required me to either build my own intermediate layer to connect processes together, or have the service processes know about, and be directly connected to, each other.
 
-# Short Comings / Improvements #
+# Short Comings & Improvements #
 -------------------------------
 - Web Server does not cache results of completed jobs. Each request for results requires the results to be queried from the database. An improvement would be to cache the result to file, and have the web server's reverse proxy (nginx) service the static content instead.
 - Web Server does not limit the number of URLs, or size of content that it processes during a job schedule request. This will allow very large crawl request to have a significant negative impact on the service. A possible solution would be to limit the number of URLs which will be parsed, and only processes up to X bytes from the request body before bailing.
