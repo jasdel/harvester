@@ -63,8 +63,8 @@ Each can be layer can be scaled vertically independently of each other. A Postgr
 
 # Design #
 ----------
-![Alt text](/images/HarvesterHighLevel.svg?raw=true "High level architecture")
-![Alt text](/images/HarvesterDB.svg?raw=true "Database table architecture")
+![Alt text](https://cdn.rawgit.com/jasdel/harvester/master/images/HarvesterHighLevel.svg "High level architecture")
+![Alt text](https://cdn.rawgit.com/jasdel/harvester/master/images/HarvesterDB.svg "Database table architecture")
 
 TODO: replace image here:
 - Reverse Proxy (e.g: nginx) provides the multiplexing between Web server instances
